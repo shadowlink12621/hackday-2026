@@ -1,0 +1,17 @@
+hackday.env
+
+.env
+.env.*
+!.env.example
+
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+dist/
+build/
+
+.vscode/
+.idea/
