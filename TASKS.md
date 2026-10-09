@@ -1,24 +1,7 @@
-# Task Assignments & Build Flow
+# ClaimGuard Task Index
 
-## Person A (Backend & Core)
-- [x] Connect the Gemini SDK with server-side model configuration and fallback mode.
-- [x] Implement `backend/gemma_client.py` and strict Pydantic schemas.
-- [x] Implement `backend/engine.py` with deterministic rules and SQLite claim storage.
-- [x] Set up tests for fallback/mock mode.
-- [x] Package the logic into `skills/expense-claim-audit/SKILL.md` (Agent Skill Standard).
-- [x] Align the validation endpoint and response key with `AGENTS.md`.
-- [x] Add database-lock handling and endpoint smoke tests.
+The authoritative live checklist is [PROJECT_TRACKER.md](PROJECT_TRACKER.md).
 
-## Person B (Frontend & Demo)
-- [x] Initialize Vite + React in `frontend/`.
-- [x] Build the upload flow with expense/health-insurance selection.
-- [x] Connect `api.js` to `POST /api/validate`.
-- [x] Render telemetry, confidence, validation rules, and approval status.
-- [ ] Connect claim history, reviewer decisions, and CSV export.
-- [ ] Browser-test the responsive flow and polish the demo.
+Person A is Vansh. Person A work has two internal lanes: Antigravity builds core agent/workflow features, and Codex handles backend hardening and verification. Both work only within Person A ownership: `backend/`, contracts, tests, skills, and final integration.
 
-## Execution Plan
-1. **Freeze MVP** (15 mins after drop)
-2. **Core Build** (E2E Pipeline)
-3. **Expansion** (Add one differentiator)
-4. **Freeze & Polish** (Final testing & demo rehearsal)
+Person B owns `frontend/`, browser testing, demo polish, and deployment from `feat/frontend`. Person A does not implement Person B tasks unless the user explicitly reassigns them.

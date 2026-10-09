@@ -1,58 +1,47 @@
 # ClaimGuard Master Project Tracker
 
-This document serves as the single source of truth for tracking progress across the team.
+This is the shared progress board. Check `origin/master`, `git status -sb`, and this file before each iteration. Each owner updates only their own lane after a pushed checkpoint.
 
-## 👨‍💻 PERSON A (Backend & AI) 
-**Owner:** Vansh / Antigravity / Codex
+## Person A: Vansh - Backend, AI, Contracts, Integration
 
-### Stage 1: Core Perception & Validation Engine ✅ (DONE by Antigravity)
-- [x] Scaffold FastAPI app (`main.py`).
-- [x] Connect `google-genai` SDK and enforce Pydantic schemas (`gemma_client.py`).
-- [x] Support multiple domains (Corporate Expense vs Health Insurance).
-- [x] Implement deterministic Python rules (Math, Currency).
-- [x] Implement SQLite image hashing for duplicate fraud detection (`engine.py`).
-- [x] Write baseline `pytest` suite.
+### A1: Antigravity Lane - Core Agent and Workflow
 
-### Stage 2: Storage & Workflow APIs ✅ (DONE by Antigravity)
-- [x] Upgrade SQLite schema to store full claims (ID, Domain, Extracted JSON, Status: Pending/Approved/Rejected).
-- [x] Update `POST /api/validate` to save the claim to the DB and return the `claim_id`.
-- [x] Implement `GET /api/claims` (Fetch all claims for the dashboard).
-- [x] Implement `POST /api/claims/{id}/decision` (Manager clicks Approve or Reject).
-- [x] Implement `GET /api/export.csv` (Download audit report).
-- [x] Standardize API endpoints (e.g. `/api/validate`) and JSON payload names (`validation`) across backend and `CONTRACTS.md`.
+- [x] Build FastAPI application and Gemini extraction client.
+- [x] Support `expense` and `health_insurance` claim domains.
+- [x] Build deterministic math, policy, currency, and duplicate-image checks.
+- [x] Persist claims in SQLite and expose claims, decision, and CSV APIs.
+- [x] Create the Agent Skill and baseline engine tests.
+- [x] Align the backend contract on `POST /api/validate` with `perception` and `validation`.
+- [ ] Keep model configuration and fallback behavior working during final integration.
 
-### Stage 3: Hardening & Edge Cases ✅ (DONE by Antigravity)
-- [x] Add strict file-size validation (reject files > 5MB) and MIME-type checks (`.jpg`, `.png` only) to the FastAPI validation endpoint.
-- [x] Add exception handling for `sqlite3.OperationalError` (database is locked) and retry decorator.
-- [x] Expand `backend/tests/test_engine.py` to test the new `/api/claims` and `/api/export.csv` endpoints.
-- [x] Final code cleanup and PEP8 formatting.
+### A2: Codex Lane - Backend Hardening and Verification
 
+- [x] Add a 5 MB request limit and JPEG/PNG MIME validation to `POST /api/validate`.
+- [ ] Add recovery for temporary SQLite locking during concurrent requests.
+- [ ] Add endpoint smoke tests for health, claims list, CSV export, and manager decisions.
+- [ ] Run the complete backend verification flow with fallback mode.
+- [ ] Integrate Person B's completed frontend only after it is merged to `master`.
 
----
+## Person B: Frontend, Browser Testing, Deployment
 
-## 👨‍💻 PERSON B (Frontend & Deployment)
-**Owner:** Teammate / Codex
+### B1: Frontend Integration - `feat/frontend` Only
 
-### Stage 1: Scaffold & API-connected UI ⏳
-- [x] Initialize React/Vite in `frontend/`.
-- [x] Build drag-and-drop file upload zone with Domain Selector (Expense vs Health).
-- [x] Build API Client (`api.js`) to send `file`, `domain_mode`, and `prompt` to `/api/validate`.
-- [x] Build Results Dashboard (Render Red/Green badges based on `response.validation.is_valid`).
+- [ ] Update `frontend/src/api.js` to send `file`, `domain_mode`, and `prompt` to `POST /api/validate`.
+- [ ] Add Expense / Health Insurance domain selection to the upload flow.
+- [ ] Render `perception.structured_data`, `validation.results`, and validation status.
+- [ ] Add the current-document line-item table.
 
-### Stage 2: API Integration & Workflow
-- [ ] Connect dashboard to `GET /api/claims` to fetch history.
-- [ ] Add "Approve" and "Reject" buttons that call `POST /api/claims/{id}/decision`.
-- [ ] Add "Export CSV" button pointing to `GET /api/export.csv`.
+### B2: Claims Workflow and Demo Polish - `feat/frontend` Only
 
-### Stage 3: Deployment
-- [ ] Connect repository to DigitalOcean App Platform.
-- [ ] Deploy Vite as a Static Site.
-- [ ] Deploy FastAPI as a Python Web Service, linking `GEMINI_API_KEY`.
-- [ ] End-to-end live testing before 3:30 PM deadline.
+- [ ] Fetch and display `GET /api/claims` history.
+- [ ] Add Approve / Reject manager actions using `POST /api/claims/{id}/decision`.
+- [ ] Add the `GET /api/export.csv` download action.
+- [ ] Run browser and responsive checks, then update the demo/README visuals.
+- [ ] Deploy the frontend and backend to DigitalOcean and verify the live URL.
 
-## Checkpoint Protocol
+## Shared Contract Rules
 
-- Person A records backend and contract changes here after each pushed checkpoint.
-- Person B records frontend, browser, and deployment changes here after each pushed checkpoint.
-- Before starting a new iteration, each person checks `git log origin/master`, `git status -sb`, and this tracker.
-- Shared contract changes require both people to review `AGENTS.md` and `CONTRACTS.md`.
+- `POST /api/validate` is the stable upload endpoint.
+- Responses use `perception` and `validation`; frontend code reads extracted fields from `perception.structured_data`.
+- Person A changes `backend/`, API contracts, tests, and skills. Person B changes `frontend/` and deployment work.
+- Contract changes require a documented update to `CONTRACTS.md` and confirmation from both people.
