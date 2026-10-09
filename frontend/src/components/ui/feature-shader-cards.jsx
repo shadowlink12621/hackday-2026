@@ -36,12 +36,12 @@ const features = [
 ];
 
 const shaderConfigs = [
-  { proportion: 0.34, softness: 0.9, distortion: 0.2, swirl: 0.6, swirlIterations: 8, shape: 'checks', shapeScale: 0.09, colors: ['#001f4d', '#0d6efd', '#004085', '#0dcaf0'] },
-  { proportion: 0.42, softness: 0.8, distortion: 0.16, swirl: 0.7, swirlIterations: 9, shape: 'stripes', shapeScale: 0.12, colors: ['#001a40', '#0a58ca', '#003366', '#3d8bfd'] },
-  { proportion: 0.36, softness: 0.95, distortion: 0.18, swirl: 0.65, swirlIterations: 10, shape: 'edge', shapeScale: 0.1, colors: ['#002659', '#6ea8fe', '#001f4d', '#0dcaf0'] },
-  { proportion: 0.44, softness: 0.85, distortion: 0.19, swirl: 0.72, swirlIterations: 8, shape: 'checks', shapeScale: 0.11, colors: ['#001533', '#0d6efd', '#002b66', '#0dcaf0'] },
-  { proportion: 0.32, softness: 0.9, distortion: 0.14, swirl: 0.62, swirlIterations: 11, shape: 'stripes', shapeScale: 0.1, colors: ['#00224d', '#0a58ca', '#001a40', '#3d8bfd'] },
-  { proportion: 0.4, softness: 0.88, distortion: 0.18, swirl: 0.68, swirlIterations: 9, shape: 'edge', shapeScale: 0.12, colors: ['#001a40', '#0d6efd', '#003366', '#6ea8fe'] },
+  { proportion: 0.34, softness: 0.9, distortion: 0.2, swirl: 0.6, swirlIterations: 8, shape: 'checks', shapeScale: 0.09, colors: ['#003324', '#00ffb3', '#004d36', '#a1c5b8'] },
+  { proportion: 0.42, softness: 0.8, distortion: 0.16, swirl: 0.7, swirlIterations: 9, shape: 'stripes', shapeScale: 0.12, colors: ['#002b1e', '#00e6a1', '#003d2b', '#8ab0a4'] },
+  { proportion: 0.36, softness: 0.95, distortion: 0.18, swirl: 0.65, swirlIterations: 10, shape: 'edge', shapeScale: 0.1, colors: ['#00402d', '#33ffc2', '#00261a', '#b8d6cb'] },
+  { proportion: 0.44, softness: 0.85, distortion: 0.19, swirl: 0.72, swirlIterations: 8, shape: 'checks', shapeScale: 0.11, colors: ['#001a12', '#00ffb3', '#004d36', '#a1c5b8'] },
+  { proportion: 0.32, softness: 0.9, distortion: 0.14, swirl: 0.62, swirlIterations: 11, shape: 'stripes', shapeScale: 0.1, colors: ['#003324', '#00e6a1', '#002b1e', '#8ab0a4'] },
+  { proportion: 0.4, softness: 0.88, distortion: 0.18, swirl: 0.68, swirlIterations: 9, shape: 'edge', shapeScale: 0.12, colors: ['#002b1e', '#00ffb3', '#003d2b', '#33ffc2'] },
 ];
 
 export default function FeatureShaderCards() {

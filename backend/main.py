@@ -23,7 +23,7 @@ from .engine import (
 from .gemma_client import extract_form_data, get_model_status, chat_with_claim
 from .knowledge_loader import get_insurer_knowledge, list_known_insurers
 from .policy_store import MAX_POLICY_PDF_BYTES, get_policy, ingest_policy_pdf, retrieve_policy_pages
-from .gemma_client import answer_with_policy
+from .policy.chat import answer as answer_with_policy
 
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png"}
