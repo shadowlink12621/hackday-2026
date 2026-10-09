@@ -9,7 +9,8 @@ This is a local-first demo, not an insurer decision system. Keep the user's case
 3. Upload the policy schedule/full wording as `category=policy`. Upload lab reports as `lab_report`; discharge summaries, bills, prescriptions, and other records have their own categories. A blood report is optional. A discharge summary is useful for a hospitalization claim but is not needed to understand policy wording.
 4. Render the returned policy profile only after upload. Each card uses the returned `topic`, `pages`, `evidence`, and `status`; show no card as a confirmed benefit unless the cited wording supports it. Missing evidence should say “Not found in indexed text.” `conflict_review` means a human must inspect the source.
 5. Ask policy questions through `/api/policies/{policy_id}/chat`. Display the returned `model_used`, answer, and citations. If the API reports `retrieval_only`, render the source passages and say no generated answer was made. Do not use canned responses when the backend is unavailable.
-6. Use user-confirmed policy dates or deadlines. Do not label a generic date a statutory filing limit. Offer an `.ics` download only after the user confirms the date and case.
+6. The whole-policy outline at `POST /api/policies/{policy_id}/summary` requires explicit cloud consent and an active cloud model. Show every returned citation and source excerpt; do not present retrieval-only output as a generated summary.
+7. Use user-confirmed policy dates or deadlines. Do not label a generic date a statutory filing limit. Offer an `.ics` download only after the user confirms the date and case.
 
 ## API Surface
 
@@ -18,7 +19,7 @@ This is a local-first demo, not an insurer decision system. Keep the user's case
 - `GET /api/cases/{case_id}`: get profile and linked document metadata.
 - `POST /api/cases/{case_id}/documents`: multipart `file` and `category` (`policy`, `lab_report`, `discharge_summary`, `bill`, `prescription`, `other`). Supports PDF, JPEG, PNG, max 20 MB. Files are saved under ignored local `data/cases/`; policy PDFs are also indexed for page citations.
 - `GET /api/cases/{case_id}/documents/{document_id}/download`: retrieve a file for that case.
-- Existing `GET /api/policies/{policy_id}`: upload-derived policy profile; `POST /api/policies/{policy_id}/chat`: evidence-backed question answering.
+- Existing `GET /api/policies/{policy_id}`: upload-derived policy profile; `POST /api/policies/{policy_id}/chat`: evidence-backed question answering; `POST /api/policies/{policy_id}/summary`: opt-in whole-policy outline.
 - Existing `GET /api/model/status`: show the configured cloud/local/offline state. Never label output as Gemma unless the response says a configured model generated it.
 
 ## Backend / Demo Limits

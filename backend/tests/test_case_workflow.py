@@ -1,9 +1,18 @@
 from fastapi.testclient import TestClient
+import pytest
 
 from backend import case_store, engine
 from backend.main import app
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def isolate_case_db(tmp_path, monkeypatch):
+    db_path = str(tmp_path / "case-flow.db")
+    monkeypatch.setenv("CLAIMGUARD_DB_FILE", db_path)
+    monkeypatch.setattr(engine, "DB_FILE", db_path)
+    engine.init_db()
 
 
 def test_case_documents_are_separate_and_saved_locally(tmp_path, monkeypatch):
@@ -71,6 +80,22 @@ def test_offline_claim_extraction_does_not_invent_sample_data(monkeypatch):
     data, is_fallback, source = extract_form_data(b"some bytes", "image/jpeg", "", "health_insurance")
     assert is_fallback is True
     assert source == "offline_mock"
-    assert data.provider_name == "Not extracted"
+    assert data.provider_name.startswith("Not extracted")
     assert data.items == []
     assert data.confidence_score == 0.0
+
+
+def test_offline_validation_cannot_return_an_approved_claim(monkeypatch):
+    monkeypatch.setenv("FORCE_MOCK", "1")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    response = client.post(
+        "/api/validate",
+        data={"domain_mode": "health_insurance"},
+        files={"file": ("bill.png", b"image bytes", "image/png")},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["perception"]["structured_data"]["provider_name"].startswith("Not extracted")
+    assert payload["perception"]["confidence"] == 0.0
+    assert payload["validation"]["is_valid"] is False
+    assert any(rule["rule_name"] == "Model extraction unavailable" for rule in payload["validation"]["results"])

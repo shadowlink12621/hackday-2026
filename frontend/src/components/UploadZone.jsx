@@ -61,7 +61,7 @@ export default function UploadZone({
           type="file" 
           ref={fileInputRef} 
           onChange={handleFileChange} 
-          accept="image/*,application/pdf"
+          accept="image/jpeg,image/png,.jpg,.jpeg,.png"
         />
         
         {previewUrl ? (
@@ -70,7 +70,7 @@ export default function UploadZone({
           <>
             <div className="upload-icon upload-symbol">↑</div>
             <strong>Drag and drop file here</strong>
-            <span>JPG, PNG up to 5MB</span>
+            <span>JPEG or PNG up to 5 MB</span>
           </>
         )}
       </div>

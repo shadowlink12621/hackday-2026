@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 from .engine import (
+    RuleResult,
     analyze_insurance_message,
     generate_claim_calendar_ics,
     get_all_claims,
@@ -22,8 +23,8 @@ from .engine import (
 )
 from .gemma_client import extract_form_data, get_model_status, chat_with_claim
 from .knowledge_loader import get_insurer_knowledge, list_known_insurers
-from .policy_store import MAX_POLICY_PDF_BYTES, get_policy, ingest_policy_pdf, retrieve_policy_pages
-from .gemma_client import answer_with_policy
+from .policy_store import MAX_POLICY_PDF_BYTES, get_policy, get_policy_pages, ingest_policy_pdf, retrieve_policy_pages
+from .gemma_client import answer_with_policy, summarize_policy_pages
 from .case_store import (
     ALLOWED_DOCUMENT_TYPES,
     DOCUMENT_CATEGORIES,
@@ -123,6 +124,13 @@ async def process_request(
         extract_form_data, contents, mime_type, prompt or "", domain_mode
     )
     validation_result = run_deterministic_checks(extracted_data, contents, rule_settings, domain_mode)
+    if is_mock and extracted_data.confidence_score == 0:
+        validation_result.results.append(RuleResult(
+            rule_name="Model extraction unavailable",
+            passed=False,
+            message="No AI model produced evidence. Configure Cloud Gemma or local Ollama before treating this upload as analyzed.",
+        ))
+        validation_result.is_valid = False
 
     claim_id = save_claim(domain_mode, extracted_data, validation_result)
     latency_ms = int((time.time() - start_time) * 1000)
@@ -220,6 +228,11 @@ def read_policy(policy_id: int):
 
 class PolicyQuestion(BaseModel):
     question: str
+    allow_cloud_processing: bool = False
+
+
+class PolicySummaryRequest(BaseModel):
+    allow_cloud_processing: bool = False
 
 
 @app.post("/api/policies/{policy_id}/chat")
@@ -230,8 +243,32 @@ async def ask_policy(policy_id: int, payload: PolicyQuestion):
     if not policy:
         raise HTTPException(status_code=404, detail=f"Policy {policy_id} not found.")
     evidence = retrieve_policy_pages(policy_id, payload.question)
-    result = await run_in_threadpool(answer_with_policy, payload.question, evidence)
+    result = await run_in_threadpool(
+        answer_with_policy, payload.question, evidence, payload.allow_cloud_processing
+    )
     return {"policy": policy, **result}
+
+
+@app.post("/api/policies/{policy_id}/summary")
+async def summarize_policy(policy_id: int, payload: PolicySummaryRequest):
+    """Generate a whole-policy outline only after explicit cloud consent."""
+    if not get_policy(policy_id):
+        raise HTTPException(status_code=404, detail=f"Policy {policy_id} not found.")
+    pages = get_policy_pages(policy_id)
+    result = await run_in_threadpool(
+        summarize_policy_pages, pages, payload.allow_cloud_processing
+    )
+    summary = result.get("summary")
+    cited_pages = set()
+    if summary:
+        for key, value in summary.items():
+            if isinstance(value, list):
+                for fact in value:
+                    cited_pages.update(fact.get("pages", []))
+            elif isinstance(value, dict):
+                cited_pages.update(value.get("pages", []))
+    sources = [page for page in pages if page["page"] in cited_pages]
+    return {**result, "sources": sources}
 
 
 class CaseCreateRequest(BaseModel):

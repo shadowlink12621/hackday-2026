@@ -86,6 +86,63 @@ export async function getModelStatus() {
   return response.json();
 }
 
+export async function getCases() {
+  const response = await request('/cases');
+  return response.json();
+}
+
+export async function createCase(patient) {
+  const response = await request('/cases', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patient),
+  });
+  return response.json();
+}
+
+export async function getCase(caseId) {
+  const response = await request(`/cases/${encodeURIComponent(caseId)}`);
+  return response.json();
+}
+
+export async function uploadCaseDocument(caseId, file, category) {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('category', category);
+  const response = await request(`/cases/${encodeURIComponent(caseId)}/documents`, {
+    method: 'POST',
+    body: form,
+  });
+  return response.json();
+}
+
+export async function getPolicy(policyId) {
+  const response = await request(`/policies/${encodeURIComponent(policyId)}`);
+  return response.json();
+}
+
+export async function askPolicy(policyId, question, allowCloudProcessing = false) {
+  const response = await request(`/policies/${encodeURIComponent(policyId)}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question, allow_cloud_processing: allowCloudProcessing }),
+  });
+  return response.json();
+}
+
+export async function generatePolicySummary(policyId, allowCloudProcessing = false) {
+  const response = await request(`/policies/${encodeURIComponent(policyId)}/summary`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ allow_cloud_processing: allowCloudProcessing }),
+  });
+  return response.json();
+}
+
+export function getCaseDocumentUrl(caseId, documentId) {
+  return `${API}/cases/${encodeURIComponent(caseId)}/documents/${encodeURIComponent(documentId)}/download`;
+}
+
 export function getCalendarIcsUrl(claimId) {
   return `${API}/claims/${encodeURIComponent(claimId)}/calendar.ics`;
 }

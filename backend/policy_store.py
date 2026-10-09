@@ -197,6 +197,18 @@ def get_policy(policy_id: int) -> dict[str, Any] | None:
     return policy
 
 
+@with_db_retry
+def get_policy_pages(policy_id: int) -> list[dict[str, Any]]:
+    """Return locally indexed pages with common personal identifiers redacted."""
+    init_policy_db()
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            "SELECT page_number, page_text FROM policy_pages WHERE policy_id = ? ORDER BY page_number",
+            (policy_id,),
+        ).fetchall()
+    return [{"page": row[0], "text": _redact_text(row[1])} for row in rows]
+
+
 def retrieve_policy_pages(policy_id: int, question: str, limit: int = MAX_RETRIEVAL_PAGES) -> list[dict[str, Any]]:
     init_policy_db()
     terms = {

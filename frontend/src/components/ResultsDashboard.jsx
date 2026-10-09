@@ -11,7 +11,7 @@ export default function ResultsDashboard({ result, loading }) {
           <h2>Validation Results</h2>
         </div>
         {result && result.metadata && result.metadata.is_fallback_mock && (
-          <div className="mock-tag">MOCK DATA</div>
+          <div className="mock-tag">OFFLINE · NOT EXTRACTED</div>
         )}
       </div>
       
@@ -19,7 +19,7 @@ export default function ResultsDashboard({ result, loading }) {
         <div className="empty-state">
           <div className="empty-icon">▨</div>
           <strong>No Active Claim</strong>
-          <p>Upload a document on the left to see Gemma 4 extraction and engine verification.</p>
+          <p>Upload a receipt image to see the configured model result and deterministic checks.</p>
         </div>
       )}
       

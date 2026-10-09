@@ -101,13 +101,13 @@ function App() {
             <div className="eyebrow">CLAIMGUARD · BENEFIT & READINESS COMPANION</div>
             <h1>Insurance Claim Readiness & Benefit Navigator</h1>
             <p className="subtitle">
-              Verify medical bills, index 60+ page policy wordings with citations, track 30-day statutory deadlines, and audit suspicious messages.
+              Keep each patient’s policy and supporting documents together. Review source pages and confirm important details before acting.
             </p>
           </div>
           <div className="hero-stat">
-            <span>MODEL</span>
-            <strong>Gemma 4 Multimodal</strong>
-            <small>Local RAG + Citations</small>
+            <span>CASE DATA</span>
+            <strong>Stored locally</strong>
+            <small>Model status shown per workflow</small>
           </div>
         </div>
 
@@ -141,7 +141,7 @@ function App() {
               cursor: 'pointer',
             }}
           >
-            🏥 Patient Case & 59-Page Policy RAG
+            🏥 Patient Cases & Policy
           </button>
           <button
             onClick={() => setActiveTab('scam')}
