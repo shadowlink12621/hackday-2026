@@ -1,17 +1,19 @@
 import React from 'react';
 import ChatInterface from './ChatInterface';
 import AnalyticsChart from './AnalyticsChart';
+import PolicyGuidePanel from './PolicyGuidePanel';
 
 export default function ResultsDashboard({ result, loading }) {
+  const policyGuide = result?.policy_guide;
   return (
     <section className="card results-card">
       <div className="card-heading">
         <div>
           <div className="eyebrow">STEP 2</div>
-          <h2>Validation Results</h2>
+          <h2>{result?.metadata?.document_type === 'policy_document' ? 'Policy document guide' : 'Validation Results'}</h2>
         </div>
         {result && result.metadata && result.metadata.is_fallback_mock && (
-          <div className="mock-tag">MOCK DATA</div>
+          <div className="mock-tag">{result.metadata.document_type === 'policy_document' ? 'KEYWORD SCAN' : 'MOCK DATA'}</div>
         )}
       </div>
       
@@ -33,41 +35,52 @@ export default function ResultsDashboard({ result, loading }) {
 
       {result && result.validation && (
         <>
-          <div className={`decision-banner ${result.validation.is_valid ? 'decision-pass' : 'decision-review'}`}>
-            <div className="decision-icon">
-              {result.validation.is_valid ? '✓' : '!'}
-            </div>
-            <div>
-              <strong>{result.validation.is_valid ? 'SYSTEM APPROVED' : 'FLAGGED / MANUAL REVIEW'}</strong>
-              <small>Claim #{result.claim_id || 'N/A'}</small>
-            </div>
-            {result.perception && result.perception.confidence && (
-              <div className="confidence">
-                CONFIDENCE: {(result.perception.confidence * 100).toFixed(0)}%
+          {result.metadata?.document_type === 'policy_document' ? (
+            <>
+              <div className="decision-banner policy-scan-banner">
+                <div className="decision-icon">⌕</div>
+                <div>
+                  <strong>POLICY DOCUMENT SCANNED</strong>
+                  <small>Review the extracted highlights and claim preparation suggestions below.</small>
+                </div>
               </div>
-            )}
-          </div>
+              <PolicyGuidePanel guide={policyGuide} />
+            </>
+          ) : (
+            <>
+              <div className={`decision-banner ${result.validation.is_valid ? 'decision-pass' : 'decision-review'}`}>
+                <div className="decision-icon">{result.validation.is_valid ? '✓' : '!'}</div>
+                <div>
+                  <strong>{result.validation.is_valid ? 'SYSTEM APPROVED' : 'FLAGGED / MANUAL REVIEW'}</strong>
+                  <small>Claim #{result.claim_id || 'N/A'}</small>
+                </div>
+                {result.perception?.confidence > 0 && (
+                  <div className="confidence">CONFIDENCE: {(result.perception.confidence * 100).toFixed(0)}%</div>
+                )}
+              </div>
 
-          <div className="summary-grid">
-            <div className="summary-tile">
-              <span>PROVIDER / VENDOR</span>
-              <strong>{result.perception.structured_data.provider_name || result.perception.structured_data.vendor_name || 'Unknown'}</strong>
-            </div>
-            <div className="summary-tile">
-              <span>PATIENT / EMPLOYEE</span>
-              <strong>{result.perception.structured_data.patient_or_employee_name || 'N/A'}</strong>
-            </div>
-            <div className="summary-tile">
-              <span>ORIGINAL AMOUNT</span>
-              <strong>{result.perception.structured_data.total_extracted} {result.perception.structured_data.currency}</strong>
-            </div>
-            <div className="summary-tile">
-              <span>FINAL AMOUNT (INR)</span>
-              <strong className="amount">₹{result.validation.final_amount_inr}</strong>
-            </div>
-          </div>
+              <div className="summary-grid">
+                <div className="summary-tile">
+                  <span>PROVIDER / VENDOR</span>
+                  <strong>{result.perception.structured_data.provider_name || result.perception.structured_data.vendor_name || 'Unknown'}</strong>
+                </div>
+                <div className="summary-tile">
+                  <span>PATIENT / EMPLOYEE</span>
+                  <strong>{result.perception.structured_data.patient_or_employee_name || 'N/A'}</strong>
+                </div>
+                <div className="summary-tile">
+                  <span>ORIGINAL AMOUNT</span>
+                  <strong>{result.perception.structured_data.total_extracted} {result.perception.structured_data.currency}</strong>
+                </div>
+                <div className="summary-tile">
+                  <span>FINAL AMOUNT (INR)</span>
+                  <strong className="amount">₹{result.validation.final_amount_inr}</strong>
+                </div>
+              </div>
 
-          <div className="rules-heading subheading">
+              {policyGuide && <PolicyGuidePanel guide={policyGuide} />}
+
+              <div className="rules-heading subheading">
             <h3>ENGINE VERIFICATION <span className="count-tag">{result.validation.results.length} RULES</span></h3>
           </div>
           
@@ -115,6 +128,8 @@ export default function ResultsDashboard({ result, loading }) {
           <div style={{ marginTop: '32px' }}>
              <ChatInterface claimId={result.claim_id} />
           </div>
+            </>
+          )}
         </>
       )}
     </section>

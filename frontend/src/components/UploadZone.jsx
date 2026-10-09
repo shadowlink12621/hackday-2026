@@ -1,5 +1,9 @@
 import React, { useRef } from 'react';
 
+function formatFileSize(bytes) {
+  return bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
 export default function UploadZone({ 
   domainMode, setDomainMode, file, previewUrl, 
   loading, handleFileChange, handleAnalyze, setFile, setPreviewUrl, setResult, setError
@@ -22,7 +26,7 @@ export default function UploadZone({
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const dropped = e.dataTransfer.files[0];
       setFile(dropped);
-      setPreviewUrl(URL.createObjectURL(dropped));
+      setPreviewUrl(dropped.type === 'application/pdf' ? null : URL.createObjectURL(dropped));
       setResult(null);
       setError(null);
     }
@@ -64,13 +68,19 @@ export default function UploadZone({
           accept="image/*,application/pdf"
         />
         
-        {previewUrl ? (
+        {file?.type === 'application/pdf' ? (
+          <div className="pdf-selected" aria-label="Selected PDF file">
+            <span className="pdf-selected-icon">PDF</span>
+            <strong>{file.name}</strong>
+            <span>{formatFileSize(file.size)} · PDF</span>
+          </div>
+        ) : previewUrl ? (
           <img src={previewUrl} alt="Receipt Preview" className="preview-image" />
         ) : (
           <>
             <div className="upload-icon upload-symbol">↑</div>
             <strong>Drag and drop file here</strong>
-            <span>JPG, PNG up to 5MB</span>
+            <span>JPG, PNG, or searchable PDF up to 5MB</span>
           </>
         )}
       </div>

@@ -22,7 +22,7 @@ export async function processDocument(file, domainMode) {
   form.append('file', file);
   form.append('domain_mode', domainMode);
   form.append('prompt', healthMode
-    ? 'Extract the Indian health insurance claim details, itemized amounts, patient and provider information, and relevant dates. Return the requested structured claim data.'
+    ? 'Extract the Indian health insurance claim details, itemized amounts, patient and provider information, and relevant dates. If this is a policy document, also summarize relevant coverage, exclusions, limits, waiting periods, and claims requirements with page references. Return the requested structured claim data.'
     : 'Extract the corporate expense receipt details, itemized amounts, employee and merchant information, and relevant dates. Return the requested structured claim data.');
   form.append('rule_settings', '{}');
   const response = await request('/validate', { method: 'POST', body: form });

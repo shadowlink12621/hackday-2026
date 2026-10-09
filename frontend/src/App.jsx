@@ -34,7 +34,7 @@ function App() {
     const selected = e.target.files[0];
     if (selected) {
       setFile(selected);
-      setPreviewUrl(URL.createObjectURL(selected));
+      setPreviewUrl(selected.type === 'application/pdf' ? null : URL.createObjectURL(selected));
       setResult(null);
       setError(null);
     }
@@ -115,6 +115,15 @@ function App() {
             <button onClick={() => setError(null)}>×</button>
           </div>
         )}
+
+      {file?.type === 'application/pdf' && !result && (
+        <div className="notice notice-info pdf-notice" role="status">
+          <div>
+            <strong>PDF detected</strong>
+            <p style={{ margin: '4px 0 0' }}>After submission, ClaimGuard will scan its searchable text and show policy highlights, claim traps, and next steps.</p>
+          </div>
+        </div>
+      )}
         
         <div className="work-grid">
           <div>

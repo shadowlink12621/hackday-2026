@@ -347,6 +347,38 @@ button, select {
   backdrop-filter: blur(5px);
 }
 
+.pdf-selected {
+  display: flex;
+  width: min(100% - 32px, 360px);
+  min-height: 116px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.pdf-selected-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 54px;
+  border: 1px solid rgba(255, 111, 111, 0.4);
+  border-radius: 8px;
+  background: rgba(255, 77, 77, 0.12);
+  color: #ff8585;
+  font: 700 11px 'DM Mono', monospace;
+}
+
+.pdf-selected strong {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pdf-selected span:last-child { color: #819294; font-size: 12px; }
+
 /* Buttons */
 .primary-button {
   width: 100%;
@@ -669,6 +701,44 @@ tbody tr:hover td { background: rgba(255, 255, 255, 0.02); }
 .rule-row strong { font-size: 14px; color: #fff; display: block; margin-bottom: 4px; }
 .rule-row p { margin: 0; color: #a0b2b5; font-size: 13px; line-height: 1.5; }
 
+.policy-guide {
+  margin: 28px 0 8px;
+  padding: 22px;
+  border: 1px solid rgba(0, 255, 179, 0.24);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(0, 255, 179, 0.055), rgba(0, 0, 0, 0.22));
+}
+.policy-scan-banner { border-color: rgba(0, 255, 179, 0.22); background: rgba(0, 255, 179, 0.06); }
+
+.policy-guide-heading, .policy-insight-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.policy-guide-heading h3 { margin: 5px 0 0; color: #fff; font: 700 18px Manrope, sans-serif; }
+.policy-guide-tag, .policy-insight-title span {
+  flex: none;
+  border: 1px solid rgba(0, 255, 179, 0.24);
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: var(--teal);
+  font: 600 9px 'DM Mono', monospace;
+}
+.policy-guide-summary { margin: 14px 0 18px; color: #b4c5c6; font-size: 13px; line-height: 1.55; }
+.policy-guide-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.policy-guide-columns h4 { margin: 0 0 10px; color: #eaf1f2; font: 700 12px Manrope, sans-serif; letter-spacing: .4px; }
+.policy-insight-list { display: grid; gap: 9px; }
+.policy-insight { padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(0, 0, 0, .23); }
+.policy-insight-title strong { color: #fff; font-size: 12px; }
+.policy-insight p { margin: 7px 0; color: #b4c5c6; font-size: 12px; line-height: 1.5; }
+.policy-insight small { color: #91a5a8; font-size: 11px; line-height: 1.5; }
+.policy-insight small b { color: var(--teal); }
+.policy-trap { border-left: 2px solid rgba(255, 209, 102, .65); }
+.policy-guide-empty, .policy-guide-note { color: #91a5a8; font-size: 11px; line-height: 1.5; }
+.policy-guide-note { display: block; margin-top: 16px; }
+
 /* History Section */
 .history-card {
   padding: 24px 32px;
@@ -753,6 +823,14 @@ tbody tr:hover td { background: rgba(255, 255, 255, 0.02); }
 }
 
 .notice-error strong { color: #ff4d4d; font-size: 15px; }
+
+.notice-info {
+  border: 1px solid rgba(0, 255, 179, 0.22);
+  background: rgba(0, 255, 179, 0.055);
+  color: #c3d7d5;
+}
+.notice-info strong { color: var(--teal); font-size: 14px; }
+.pdf-notice { margin-top: 20px; }
 
 .notice button {
   border: none;
@@ -861,4 +939,6 @@ tbody tr:hover td { background: rgba(255, 255, 255, 0.02); }
   .hero-stat { border-left: none; border-top: 2px solid var(--teal-dim); padding-left: 0; padding-top: 12px; width: 100%; flex-direction: row; justify-content: space-between; align-items: center; }
   .intake-card, .results-card, .history-card { padding: 20px; }
   .summary-grid { grid-template-columns: 1fr; }
+  .policy-guide { padding: 16px; }
+  .policy-guide-columns { grid-template-columns: 1fr; }
 }
