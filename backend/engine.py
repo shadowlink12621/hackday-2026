@@ -14,7 +14,6 @@ def init_db():
     conn.commit()
     conn.close()
 
-# Initialize DB on load
 init_db()
 
 class RuleResult(BaseModel):
@@ -28,15 +27,12 @@ class ValidationResult(BaseModel):
     results: list[RuleResult]
 
 def get_exchange_rate(currency: str) -> float:
-    # In a real scenario, use requests.get("https://api.exchangerate-api.com/v4/latest/USD")
-    # Using fixed rates to ensure demo stability
     rates = {"USD": 83.5, "EUR": 90.0, "INR": 1.0}
     return rates.get(currency.upper(), 1.0)
 
-def run_deterministic_checks(extracted_data, image_bytes: bytes, rule_settings_json: str) -> ValidationResult:
+def run_deterministic_checks(extracted_data, image_bytes: bytes, rule_settings_json: str, domain_mode: str) -> ValidationResult:
     results = []
     
-    # Optional settings
     try:
         settings = json.loads(rule_settings_json)
     except:
@@ -44,37 +40,57 @@ def run_deterministic_checks(extracted_data, image_bytes: bytes, rule_settings_j
         
     policy_limit_inr = settings.get("policy_limit_inr", 4000.0)
     
-    # Check 1: Fraud / Duplicate Check
+    # 1. Fraud / Duplicate Check
     image_hash = hashlib.sha256(image_bytes).hexdigest() if image_bytes else "no-image-hash"
     
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("SELECT hash FROM receipts WHERE hash=?", (image_hash,))
     if c.fetchone() and image_bytes:
-        results.append(RuleResult(rule_name="Fraud Detection", passed=False, message="🚨 DUPLICATE DETECTED! This receipt has already been claimed."))
+        results.append(RuleResult(rule_name="Fraud Detection", passed=False, message="🚨 DUPLICATE DETECTED! This document has already been processed."))
     else:
-        results.append(RuleResult(rule_name="Fraud Detection", passed=True, message="Receipt hash is unique."))
+        results.append(RuleResult(rule_name="Fraud Detection", passed=True, message="Document hash is unique."))
         if image_bytes:
             c.execute("INSERT INTO receipts (hash) VALUES (?)", (image_hash,))
             conn.commit()
     conn.close()
 
-    # Check 2: Math Verification
+    # 2. Math Verification
     calculated_total = sum(item.amount for item in extracted_data.items)
     if abs(calculated_total - extracted_data.total_extracted) < 0.01:
         results.append(RuleResult(rule_name="Math Verification", passed=True, message=f"Line items sum perfectly to {calculated_total}."))
     else:
         results.append(RuleResult(rule_name="Math Verification", passed=False, message=f"Math error! AI read total as {extracted_data.total_extracted}, but items sum to {calculated_total}."))
 
-    # Check 3: Currency & Policy Limit
+    # 3. Domain Specific Logic
     exchange_rate = get_exchange_rate(extracted_data.currency)
     final_amount_inr = calculated_total * exchange_rate
     
-    msg = f"Converted {calculated_total} {extracted_data.currency} to {final_amount_inr} INR."
-    if final_amount_inr <= policy_limit_inr:
-        results.append(RuleResult(rule_name="Policy Limit", passed=True, message=f"{msg} Within policy limit of ₹{policy_limit_inr}."))
+    if domain_mode == "health_insurance":
+        # Specific Indian Health Insurance Rules
+        # e.g., Room rent capped at 1% of a standard 5L sum insured = 5000/day. Let's hardcode a check for demo.
+        room_rent_items = [item for item in extracted_data.items if item.category == "room_rent"]
+        if room_rent_items:
+            # Assuming amount is total room rent. Let's just flag if > 10000 for demo
+            room_total = sum(i.amount for i in room_rent_items) * exchange_rate
+            if room_total > 10000:
+                results.append(RuleResult(rule_name="Room Rent Cap", passed=False, message=f"Room rent {room_total} INR exceeds standard cap. Requires manual review."))
+            else:
+                results.append(RuleResult(rule_name="Room Rent Cap", passed=True, message=f"Room rent {room_total} INR within limits."))
+        
+        consumables = [item for item in extracted_data.items if item.category == "consumables"]
+        if consumables:
+            results.append(RuleResult(rule_name="Consumables Excluded", passed=False, message="Non-medical consumables are not covered by standard policy."))
+        else:
+            results.append(RuleResult(rule_name="Consumables Check", passed=True, message="No non-medical consumables found."))
+            
     else:
-        results.append(RuleResult(rule_name="Policy Limit", passed=False, message=f"{msg} EXCEEDS policy limit of ₹{policy_limit_inr}!"))
+        # Standard Expense Receipt Logic
+        msg = f"Converted {calculated_total} {extracted_data.currency} to {final_amount_inr} INR."
+        if final_amount_inr <= policy_limit_inr:
+            results.append(RuleResult(rule_name="Policy Limit", passed=True, message=f"{msg} Within policy limit of ₹{policy_limit_inr}."))
+        else:
+            results.append(RuleResult(rule_name="Policy Limit", passed=False, message=f"{msg} EXCEEDS policy limit of ₹{policy_limit_inr}!"))
         
     # Aggregate result
     is_valid = all(r.passed for r in results)

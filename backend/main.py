@@ -6,7 +6,7 @@ import time
 from datetime import datetime, timezone
 from typing import Optional
 
-app = FastAPI(title="ClaimGuard Engine API")
+app = FastAPI(title="ClaimGuard Enterprise API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,33 +24,32 @@ def health_check():
 async def process_request(
     prompt: str = Form(...),
     file: Optional[UploadFile] = File(None),
-    domain_mode: str = Form("receipts"),
+    domain_mode: str = Form("expense"), # 'expense' or 'health_insurance'
     rule_settings: str = Form("{}")
 ):
     """
-    Main endpoint for ClaimGuard.
+    Main endpoint for ClaimGuard (Universal Claims).
     """
     start_time = time.time()
     
-    # Extract file data if present
     contents = await file.read() if file else b""
     mime_type = file.content_type if file else "text/plain"
     
-    # Phase 1: AI Perception (Probabilistic)
+    # Phase 1: AI Perception
     extracted_data, is_mock = extract_form_data(contents, mime_type, prompt, domain_mode)
     
-    # Phase 2: Code Validation (Deterministic + Fraud Check)
-    validation = run_deterministic_checks(extracted_data, contents, rule_settings)
+    # Phase 2: Code Validation (Math, Fraud, and Domain Rules)
+    validation = run_deterministic_checks(extracted_data, contents, rule_settings, domain_mode)
     
     latency_ms = int((time.time() - start_time) * 1000)
     
-    # Unified response
     return {
         "metadata": {
             "model_used": "gemini-2.5-flash",
             "is_fallback_mock": is_mock,
             "latency_ms": latency_ms,
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "domain": domain_mode
         },
         "perception": {
             "structured_data": extracted_data.model_dump(),
