@@ -33,7 +33,7 @@ This is the unified project tracking board for the ClaimGuard team.
 
 ### Stage 4: Companion Features & Local Knowledge
 - [x] **Local Insurer Knowledge Base**: Build markdown knowledge base (`backend/knowledge/`) for HDFC ERGO, Star Health, Niva Bupa, Care Health, ICICI Lombard, and SBI General with real-world claim repudiation traps (lifestyle/smoking disclosures, room rent proportional deductions, 15-bed minimums, consumables exclusions).
-- [x] **Benefit & Deadline Calendar Engine**: Generate RFC 5545 `.ics` calendar files (`GET /api/claims/{id}/calendar.ics`) for 30-day document submission cutoff, 7-day TPA follow-up, and 90-day post-hospitalization bills.
+- [x] **Benefit & Deadline Calendar Engine**: Generate RFC 5545 `.ics` reminders (`GET /api/claims/{id}/calendar.ics`); generic intervals are now labeled provisional, not statutory or policy deadlines.
 - [x] **ScamCheck Engine**: Analyze SMS, email, and WhatsApp messages for insurance refund fee extortion (`POST /api/scamcheck`) referencing IRDAI Bima Bharosa warnings.
 - [x] **Hybrid Gemma Architecture**: Support Cloud Gemma 4, Local Ollama open-source Gemma (`http://localhost:11434`), and offline structured mock fallback with `GET /api/model/status`.
 - [x] **Interactive Claim Chat**: Add `POST /api/chat` to allow conversational Q&A with Gemma about specific audited claims.
@@ -42,6 +42,15 @@ This is the unified project tracking board for the ClaimGuard team.
   - `backend/scripts/validate_insurer_knowledge.py`: Validates all 6 insurer trap files.
   - `backend/scripts/benchmark_gemma.py`: Multi-tier benchmark utility for Gemma.
   - `backend/scripts/validate_cli.py`: Standalone CLI claim validator.
+
+### Stage 5: User Policy Ingestion & Evidence Chat
+- [x] Add bounded PDF ingestion and page-by-page text extraction in `backend/policy_store.py`.
+- [x] Store extracted policy text locally; deduplicate repeat uploads and do not retain source PDF bytes.
+- [x] Add retrieval-backed profile and policy chat APIs with page citations.
+- [x] Keep offline replies extractive and explicit when no language model is available.
+- [x] Add redacted policy UI fixture and detailed Person B handoff.
+- [x] Complete backend test suite (25 passed) and verify upload/chat against the local 59-page sample in a temporary database.
+- [ ] Person B implements policy upload/profile cards, citation chat, model mode, and reminder UI on `feat/frontend`.
 
 ---
 

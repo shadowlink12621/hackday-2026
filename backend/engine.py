@@ -394,8 +394,8 @@ UID:claimguard-deadline-{claim_id}@claimguard.ai
 DTSTAMP:{datetime.now().strftime("%Y%m%dT%H%M%SZ")}
 DTSTART;VALUE=DATE:{format_ics_date(deadline_dt)}
 DTEND;VALUE=DATE:{format_ics_date(deadline_dt + timedelta(days=1))}
-SUMMARY:🚨 ClaimGuard Deadline: Submit Documents for Claim #{claim_id} ({vendor})
-DESCRIPTION:Official policy submission cutoff (30-day rule). Ensure all original hospital bills, discharge summary, and pharmacy receipts for ₹{total:.2f} are submitted to your insurer or TPA.
+SUMMARY:ClaimGuard reminder: verify document deadline for claim #{claim_id} ({vendor})
+DESCRIPTION:Provisional reminder 30 days after the extracted document date. This is not a universal or statutory cutoff. Confirm the filing deadline in the active policy or with the insurer. Claim amount on record: INR {total:.2f}.
 STATUS:CONFIRMED
 BEGIN:VALARM
 TRIGGER:-P1D
@@ -408,8 +408,8 @@ UID:claimguard-followup-{claim_id}@claimguard.ai
 DTSTAMP:{datetime.now().strftime("%Y%m%dT%H%M%SZ")}
 DTSTART;VALUE=DATE:{format_ics_date(followup_dt)}
 DTEND;VALUE=DATE:{format_ics_date(followup_dt + timedelta(days=1))}
-SUMMARY:📞 ClaimGuard Checkpoint: Follow up on Claim #{claim_id} with TPA
-DESCRIPTION:Follow up with insurer/TPA helpline to verify claim acknowledgement number and pre-authorization status for ₹{total:.2f}.
+SUMMARY:ClaimGuard checkpoint: follow up on claim #{claim_id} with TPA
+DESCRIPTION:Provisional 7-day follow-up reminder. Confirm the expected response timeline with the insurer/TPA. Claim amount on record: INR {total:.2f}.
 STATUS:CONFIRMED
 END:VEVENT
 BEGIN:VEVENT
@@ -417,8 +417,8 @@ UID:claimguard-posthosp-{claim_id}@claimguard.ai
 DTSTAMP:{datetime.now().strftime("%Y%m%dT%H%M%SZ")}
 DTSTART;VALUE=DATE:{format_ics_date(post_hosp_dt)}
 DTEND;VALUE=DATE:{format_ics_date(post_hosp_dt + timedelta(days=1))}
-SUMMARY:💊 ClaimGuard Reminder: Submit Post-Hospitalization Bills for Claim #{claim_id}
-DESCRIPTION:Most policies cover 60 to 90 days of post-hospitalization medicines and diagnostic follow-up visits. Collect all OPD bills and submit for reimbursement.
+SUMMARY:ClaimGuard reminder: check post-hospitalization benefit for claim #{claim_id}
+DESCRIPTION:Provisional 90-day reminder to check the active policy's post-hospitalization benefit and submission requirements. This date is not a coverage guarantee.
 STATUS:CONFIRMED
 END:VEVENT
 END:VCALENDAR

@@ -109,9 +109,11 @@ Record a manager or user decision for an audited claim.
 ## 4. `GET /api/claims/{claim_id}/calendar.ics`
 Generates and downloads an RFC 5545 `.ics` calendar reminder file for the claim.
 Tracks:
-- 30-day statutory claim documents filing cutoff.
-- 7-day TPA / Insurer follow-up milestone.
-- 90-day post-hospitalization bills submission deadline.
+- Provisional 30-day document follow-up reminder.
+- Provisional 7-day TPA / insurer follow-up reminder.
+- Provisional 90-day post-hospitalization benefit check.
+
+These are reminders only, not statutory or policy deadlines. Confirm the active policy's requirements and enter the verified date before relying on a reminder.
 
 **Response:**
 - `Content-Type: text/calendar`
@@ -189,3 +191,20 @@ Returns runtime AI model status (Cloud Gemma 4 vs Local Ollama Gemma vs Offline 
 
 ## 8. `GET /api/export.csv`
 Downloads an audit-compliant CSV report with formula-injection sanitization.
+
+---
+
+## 9. Policy PDF and Evidence Chat
+
+### `POST /api/policies`
+Accepts one `application/pdf` upload (maximum 20 MB and 300 pages). The server extracts text page-by-page, indexes it in the local SQLite database, and does not retain the original PDF bytes. Scanned/image-only PDFs return `422` until OCR support is available. Identical PDFs return the existing policy ID.
+
+Response fields include `policy_id`, `filename`, `page_count`, `insurer`, `duplicate_upload`, `indexed_pages`, and a profile with evidence page numbers.
+
+### `GET /api/policies/{policy_id}`
+Returns policy metadata and source-backed profile facts.
+
+### `POST /api/policies/{policy_id}/chat`
+Request: `{"question": "What does the policy say about cataract?"}`.
+
+Response: `{"policy": {...}, "answer": "... [page 9]", "citations": [{"page": 9, "excerpt": "..."}], "model_used": "cloud_gemma (...)"}`. The chat receives retrieved excerpts only. Without a configured model it returns retrieved evidence and states that no generated conclusion was made. It must not infer approval, coverage, or payment where the text does not establish it.

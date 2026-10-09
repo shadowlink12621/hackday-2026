@@ -22,6 +22,8 @@ from .engine import (
 )
 from .gemma_client import extract_form_data, get_model_status, chat_with_claim
 from .knowledge_loader import get_insurer_knowledge, list_known_insurers
+from .policy_store import MAX_POLICY_PDF_BYTES, get_policy, ingest_policy_pdf, retrieve_policy_pages
+from .gemma_client import answer_with_policy
 
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png"}
@@ -182,6 +184,44 @@ async def chat_endpoint(payload: ChatRequest):
     
     answer = await run_in_threadpool(chat_with_claim, json.dumps(claim), payload.question)
     return {"answer": answer}
+
+
+@app.post("/api/policies")
+async def upload_policy(file: UploadFile = File(...)):
+    """Extract and index a policy PDF locally without retaining the original file."""
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Upload a PDF policy document.")
+    contents = await file.read(MAX_POLICY_PDF_BYTES + 1)
+    if len(contents) > MAX_POLICY_PDF_BYTES:
+        raise HTTPException(status_code=413, detail="Policy PDF must be 20 MB or smaller.")
+    try:
+        return ingest_policy_pdf(contents, file.filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/api/policies/{policy_id}")
+def read_policy(policy_id: int):
+    policy = get_policy(policy_id)
+    if not policy:
+        raise HTTPException(status_code=404, detail=f"Policy {policy_id} not found.")
+    return policy
+
+
+class PolicyQuestion(BaseModel):
+    question: str
+
+
+@app.post("/api/policies/{policy_id}/chat")
+async def ask_policy(policy_id: int, payload: PolicyQuestion):
+    if not payload.question.strip():
+        raise HTTPException(status_code=400, detail="Question is required.")
+    policy = get_policy(policy_id)
+    if not policy:
+        raise HTTPException(status_code=404, detail=f"Policy {policy_id} not found.")
+    evidence = retrieve_policy_pages(policy_id, payload.question)
+    result = await run_in_threadpool(answer_with_policy, payload.question, evidence)
+    return {"policy": policy, **result}
 
 class ScamCheckRequest(BaseModel):
     message_text: str

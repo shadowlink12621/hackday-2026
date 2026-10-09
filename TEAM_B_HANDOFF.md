@@ -7,7 +7,7 @@
 ClaimGuard has expanded from a simple receipt checker into a full **Personal Claim Companion & Benefit Navigator**:
 1. **Document Workspace & Audit Engine**: Multimodal extraction + deterministic policy engine (reconciles line items, room rent caps, non-payable consumables, duplicate receipts).
 2. **Local Insurer Knowledge Base**: Real-world claim repudiation traps (HDFC ERGO, Star Health, Niva Bupa, Care Health, ICICI Lombard, SBI General). Catches lifestyle/smoking non-disclosures, room rent proportional deductions, 15-bed registered hospital requirements, and non-medical consumables.
-3. **Benefit & Deadline Calendar**: Generates RFC 5545 `.ics` reminders for 30-day statutory claim filing deadlines, 7-day TPA follow-up, and 90-day post-hospitalization bills (works with Google Calendar, Apple Calendar, Outlook).
+3. **Benefit & Deadline Calendar**: Generates RFC 5545 `.ics` reminder files. Dates are provisional until confirmed from the user's policy or entered by the user; do not label generic intervals as statutory deadlines.
 4. **ScamCheck**: Analyzes suspicious SMS/email/WhatsApp messages for fee-to-release claim scams referencing official IRDAI Bima Bharosa alerts.
 5. **3-Tier AI Engine**: Cloud Gemma 4 -> Local Offline Ollama (`http://localhost:11434`) -> Deterministic Fallback Mock.
 
@@ -23,6 +23,7 @@ ClaimGuard has expanded from a simple receipt checker into a full **Personal Cla
   - `POST /api/scamcheck`
   - `GET /api/insurers` & `GET /api/insurers/{key}`
   - `GET /api/model/status`
+* **Stage 5 (Policy PDF Retrieval & Evidence Chat)**: Backend implemented on this branch; frontend APIs and acceptance checks are described below.
 * **Current Backend Branch**: `feat/core-ai`
 
 ---
@@ -30,6 +31,27 @@ ClaimGuard has expanded from a simple receipt checker into a full **Personal Cla
 ## 3. 👨‍💻 PERSON B DIVISION (Frontend - Vite/React & UI Polish)
 **Branch:** `feat/frontend`
 **Base URL:** `http://localhost:8000/api` or `import.meta.env.VITE_API_BASE_URL`
+
+> The policy companion work below supersedes the earlier generic policy-guide screen. The local source policy and redacted UI fixture are documented in `CLAIMGUARD_SAMPLE_POLICY_UI_PROFILE.md`; shared sequencing and ownership are in `CLAIMGUARD_UPDATED_TEAM_PLAN.md`.
+
+### Person B - Policy Profile, Evidence Chat, and Reminder UI (Frontend Only)
+
+Use branch `feat/frontend`. Do not edit backend files. The API is implemented by Person A on `feat/core-ai`; sync that branch through the agreed master integration before connecting it.
+
+1. Add a policy PDF upload action calling `POST /api/policies` with multipart field `file`. Show upload/indexing progress and errors for invalid, encrypted, oversized, or scanned PDFs.
+2. After upload, call `GET /api/policies/{policy_id}` and render insurer, filename, page count, and `profile` facts. Each fact has `topic`, `pages`, `evidence`, and `status`; show citations as printed page numbers and flag `conflict_review` for human review.
+3. Add a policy question panel calling `POST /api/policies/{policy_id}/chat` with `{"question":"..."}`. Render `answer`, `model_used`, and every `citations[].page` plus excerpt. No source result means no confident policy answer.
+4. Read `GET /api/model/status`; distinguish cloud Gemma, reachable local Ollama, and offline retrieval-only mode. Do not describe retrieval-only output as a model response.
+5. Keep claim reminders as importable `.ics` links. Label dates provisional and ask the user to confirm a policy deadline; the generic reminder is not a universal legal deadline.
+6. Use only fictional profile details from `CLAIMGUARD_SAMPLE_POLICY_UI_PROFILE.md`. Never add the original PDF or its identifiers to screenshots, fixtures, or Git.
+
+#### Acceptance Checks
+
+- Cataract card cites page 9; refractive-error card cites pages 4 and 35; OPD/optical card cites pages 3 and 25.
+- Room-rent card shows a conflict warning and does not choose a cap.
+- Chat answers show page citations, and a no-evidence question says the policy text was not found.
+- Offline state is honest and useful; cloud state is visibly identified.
+- Frontend build and browser tests pass on `feat/frontend`.
 
 ### Copy & Paste Prompt for Codex (Person B Implementation):
 
