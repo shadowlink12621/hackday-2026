@@ -1,21 +1,7 @@
-# Task Assignments & Build Flow
+# ClaimGuard Task Index
 
-## Person A (Backend & Core)
-- [ ] Connect Gemma 4 API (via Gemini proxy).
-- [ ] Implement `backend/gemma_client.py` and strict Pydantic schemas.
-- [ ] Implement `backend/engine.py` (Deterministic Rules).
-- [ ] Set up tests for fallback/mock mode.
-- [ ] Package the logic into `skills/hackday-core/SKILL.md` (Agent Skill Standard).
+The authoritative live checklist is [PROJECT_TRACKER.md](PROJECT_TRACKER.md).
 
-## Person B (Frontend & Demo)
-- [ ] Implement Vite + React upload dashboard (`frontend/`).
-- [ ] Connect `api.js` to `POST /api/process`.
-- [ ] Render telemetry (metadata, latency, confidence, verification passes/fails).
-- [ ] Setup fallback demo flow.
-- [ ] Take screenshots and polish `README.md`.
+Person A is Vansh. Person A work has two internal lanes: Antigravity builds core agent/workflow features, and Codex handles backend hardening and verification. Both work only within Person A ownership: `backend/`, contracts, tests, skills, and final integration.
 
-## Execution Plan
-1. **Freeze MVP** (15 mins after drop)
-2. **Core Build** (E2E Pipeline)
-3. **Expansion** (Add one differentiator)
-4. **Freeze & Polish** (Final testing & demo rehearsal)
+Person B owns `frontend/`, browser testing, demo polish, and deployment from `feat/frontend`. Person A does not implement Person B tasks unless the user explicitly reassigns them.

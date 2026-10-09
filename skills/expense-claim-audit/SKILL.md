@@ -14,9 +14,9 @@ This skill allows agentic systems to pass raw images (receipts or medical bills)
 - **Verification:** Runs offline Python logic (SQLite DB, Math matching, Currency exchange).
 
 ## Usage (API Contract)
-Make a `POST` request to `/api/process` with a multipart form:
+Make a `POST` request to `/api/validate` with a multipart form:
 - `file`: The image payload (`.jpg`, `.png`).
 - `domain_mode`: `"expense"` or `"health_insurance"`.
 - `prompt`: Context.
 
-Returns a detailed JSON structure containing `metadata`, AI `perception` extraction, and deterministic `verification` passes/fails.
+Returns a detailed JSON structure containing `metadata`, AI `perception` extraction, and deterministic `validation` passes/fails.

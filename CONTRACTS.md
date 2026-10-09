@@ -23,7 +23,7 @@ Fetch all processed claims for the dashboard.
     "is_valid": true,
     "status": "Pending",
     "extracted_data": { ... },
-    "verification_data": { ... },
+    "validation_data": { ... },
     "timestamp": "2026-10-09 10:00:00"
   }
 ]
