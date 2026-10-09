@@ -53,6 +53,14 @@ from .engine import (
 )
 from .gemma_client import CloudModelError, extract_form_data, get_model_status, chat_with_claim, verify_cloud_connection
 from .knowledge_loader import get_insurer_knowledge, list_known_insurers
+from .case_store import (
+    create_case,
+    get_case,
+    get_case_document_path,
+    list_cases,
+    save_case_document,
+    save_case_reminder,
+)
 from .policy_store import MAX_POLICY_PDF_BYTES, get_policy, ingest_policy_pdf, retrieve_policy_pages
 from .policy.chat import answer as answer_with_policy
 
@@ -182,6 +190,15 @@ async def process_request(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except CloudModelError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if is_mock and extracted_data.confidence_score == 0:
+        # Never create a history row that looks like a processed claim when no
+        # model or parser produced evidence. The user can correct consent or
+        # model availability and retry the same upload.
+        if os.environ.get("GEMINI_API_KEY") and not allow_cloud_processing:
+            detail = "Gemma did not receive this document because cloud consent is off. Check the consent box and retry, or use an available local model. No claim was saved."
+        else:
+            detail = "No AI model extracted evidence from this document. Check Gemma connection or local Ollama availability, then retry. No claim was saved."
+        raise HTTPException(status_code=422, detail=detail)
     validation_result = run_deterministic_checks(extracted_data, contents, rule_settings, domain_mode)
     if model_source == "local_pdf_document_extractor":
         validation_result.results.append(RuleResult(
@@ -190,14 +207,6 @@ async def process_request(
             message="PDF text was parsed with deterministic heuristics. Verify every extracted amount and provider against the source before approval.",
         ))
         validation_result.is_valid = False
-    if is_mock and extracted_data.confidence_score == 0:
-        validation_result.results.append(RuleResult(
-            rule_name="Model extraction unavailable",
-            passed=False,
-            message="No AI model produced evidence. Configure Cloud Gemma or local Ollama before treating this upload as analyzed.",
-        ))
-        validation_result.is_valid = False
-
     claim_id = save_claim(domain_mode, extracted_data, validation_result)
     latency_ms = int((time.time() - start_time) * 1000)
 

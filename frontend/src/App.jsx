@@ -122,6 +122,11 @@ function App() {
   const handleAnalyze = async () => {
     if (!file) return;
 
+    if (modelStatus?.cloud_gemma_available && !modelStatus?.local_ollama_online && !allowCloudProcessing) {
+      setError('Gemma is ready, but this upload was not sent because consent is off. Check “I consent to send this document to Gemma” and click Process Claim again.');
+      return;
+    }
+
     setLoading(true);
     setError(null);
 

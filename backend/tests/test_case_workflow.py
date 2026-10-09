@@ -85,7 +85,7 @@ def test_offline_claim_extraction_does_not_invent_sample_data(monkeypatch):
     assert data.confidence_score == 0.0
 
 
-def test_offline_validation_cannot_return_an_approved_claim(monkeypatch):
+def test_offline_validation_fails_clearly_without_saving_empty_claim(monkeypatch):
     monkeypatch.setenv("FORCE_MOCK", "1")
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     response = client.post(
@@ -93,12 +93,22 @@ def test_offline_validation_cannot_return_an_approved_claim(monkeypatch):
         data={"domain_mode": "health_insurance"},
         files={"file": ("bill.png", b"image bytes", "image/png")},
     )
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["perception"]["structured_data"]["provider_name"].startswith("Not extracted")
-    assert payload["perception"]["confidence"] == 0.0
-    assert payload["validation"]["is_valid"] is False
-    assert any(rule["rule_name"] == "Model extraction unavailable" for rule in payload["validation"]["results"])
+    assert response.status_code == 422
+    assert "No claim was saved" in response.json()["detail"]
+    assert client.get("/api/claims").json() == []
+
+
+def test_cloud_upload_without_consent_is_not_saved(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setenv("FORCE_MOCK", "1")
+    response = client.post(
+        "/api/validate",
+        data={"domain_mode": "health_insurance", "allow_cloud_processing": "false"},
+        files={"file": ("bill.png", b"image bytes", "image/png")},
+    )
+    assert response.status_code == 422
+    assert "consent is off" in response.json()["detail"]
+    assert client.get("/api/claims").json() == []
 
 
 def test_user_confirmed_reminder_persists_on_case():

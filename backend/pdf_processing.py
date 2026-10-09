@@ -30,7 +30,10 @@ def extract_pdf_pages(pdf_bytes: bytes) -> list[dict]:
                 # extracting text and other readable images from this page.
                 unsupported_image = True
             text = (page.extract_text() or "").strip()
-            if unsupported_image or (not text and not images):
+            # Only rasterize a page when no searchable text or supported image
+            # was extracted. Re-rendering every text page that contains a
+            # decorative vector/logo made long policies needlessly slow.
+            if not text and (unsupported_image or not images):
                 try:
                     import fitz
 
