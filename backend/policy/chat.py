@@ -8,7 +8,7 @@ class Citation(BaseModel):
     quote: str
 
 class ChatResponse(BaseModel):
-    answer: str
+    answer: str = "Not found in the indexed excerpts."
     citations: List[Citation] = Field(default_factory=list)
 
 def _extractive_answer(question: str, evidence: list) -> ChatResponse:
