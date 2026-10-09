@@ -35,14 +35,15 @@ You are building the frontend for a Universal AI Claims Validator called "ClaimG
 We are using React/Vite (or Next.js).
 
 Context: 
-The backend (FastAPI) is live at `POST http://localhost:8000/api/process`.
+The backend (FastAPI) is live at `POST http://localhost:8000/api/validate`.
 It expects `FormData` with:
 - `file` (image)
 - `domain_mode` (string: either "expense" or "health_insurance")
+- `prompt` (string: optional, can be empty)
 
 It returns this exact JSON schema:
 {
-  "metadata": { "model_used": "gemini-2.5-flash", "domain": "health_insurance" },
+  "metadata": { "model_used": "gemma-4-26b-a4b-it", "domain": "health_insurance" },
   "perception": {
     "structured_data": {
       "provider_name": "Apollo Hospitals", "patient_or_employee_name": "Rahul Sharma",
@@ -51,7 +52,7 @@ It returns this exact JSON schema:
       "total_extracted": 20000, "confidence_score": 0.95
     }
   },
-  "verification": {
+  "validation": {
     "is_valid": false, "final_amount_inr": 20000,
     "results": [
       { "rule_name": "Fraud Detection", "passed": true, "message": "Hash unique." },
@@ -62,9 +63,9 @@ It returns this exact JSON schema:
 
 Your Tasks (Codex):
 1. Build a drag-and-drop upload zone, AND add a dropdown selector for the user to choose "Corporate Expense" or "Health Insurance".
-2. Build an `api.js` file that sends the image and the selected domain mode to the backend.
+2. Build an `api.js` file that sends the image, domain mode, and prompt to `/api/validate`.
 3. Build the Results Dashboard: A clean HTML table mapping over `response.perception.structured_data.items`.
-4. UI Badges: If `response.verification.is_valid` is true, render a GREEN "APPROVED" badge. If false, render a RED "FLAGGED/MANUAL REVIEW" badge. Show the exact failure rules.
+4. UI Badges: If `response.validation.is_valid` is true, render a GREEN "APPROVED" badge. If false, render a RED "FLAGGED/MANUAL REVIEW" badge. Show the exact failure rules.
 5. Export Feature: Add an "Export to CSV" button that converts `structured_data.items` to a CSV file.
 ```
 

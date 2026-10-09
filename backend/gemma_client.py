@@ -34,7 +34,7 @@ def extract_form_data(file_bytes: bytes, mime_type: str, user_prompt: str, domai
     if HAS_GENAI and api_key and file_bytes:
         try:
             client = genai.Client(api_key=api_key)
-            model = "gemini-2.5-flash" 
+            model = os.environ.get("GEMMA_MODEL", "gemini-2.5-flash")
             
             prompt = f"""
             Domain Mode: {domain_mode} (e.g. 'expense' or 'health_insurance')

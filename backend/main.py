@@ -9,6 +9,7 @@ from io import StringIO
 from pydantic import BaseModel
 from datetime import datetime, timezone
 from typing import Optional
+import os
 
 app = FastAPI(title="ClaimGuard Enterprise API")
 
@@ -24,9 +25,9 @@ app.add_middleware(
 def health_check():
     return {"status": "ok", "service": "ClaimGuard Validation Engine"}
 
-@app.post("/api/process")
+@app.post("/api/validate")
 async def process_request(
-    prompt: str = Form(...),
+    prompt: Optional[str] = Form(""),
     file: Optional[UploadFile] = File(None),
     domain_mode: str = Form("expense"), 
     rule_settings: str = Form("{}")
@@ -37,17 +38,17 @@ async def process_request(
     mime_type = file.content_type if file else "text/plain"
     
     extracted_data, is_mock = extract_form_data(contents, mime_type, prompt, domain_mode)
-    validation = run_deterministic_checks(extracted_data, contents, rule_settings, domain_mode)
+    validation_result = run_deterministic_checks(extracted_data, contents, rule_settings, domain_mode)
     
     # NEW: Save the claim to SQLite and get an ID
-    claim_id = save_claim(domain_mode, extracted_data, validation)
+    claim_id = save_claim(domain_mode, extracted_data, validation_result)
     
     latency_ms = int((time.time() - start_time) * 1000)
     
     return {
         "claim_id": claim_id,
         "metadata": {
-            "model_used": "gemini-2.5-flash",
+            "model_used": os.environ.get("GEMMA_MODEL", "gemini-2.5-flash"),
             "is_fallback_mock": is_mock,
             "latency_ms": latency_ms,
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -57,7 +58,7 @@ async def process_request(
             "structured_data": extracted_data.model_dump(),
             "confidence": extracted_data.confidence_score
         },
-        "verification": validation.model_dump()
+        "validation": validation_result.model_dump()
     }
 
 @app.get("/api/claims")
