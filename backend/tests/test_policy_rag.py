@@ -99,6 +99,38 @@ def test_cloud_policy_chat_requires_explicit_consent_and_respects_zero_env(monke
     assert with_consent["model_used"].startswith("cloud_gemma")
 
 
+def test_full_pdf_chat_calls_model_even_when_retrieval_misses(monkeypatch):
+    from backend.policy import chat
+
+    received = {}
+
+    def fake_generate(prompt, schema, allow_cloud_processing=False, document_uri=None):
+        received.update(prompt=prompt, consent=allow_cloud_processing, uri=document_uri)
+        return chat.ChatResponse(answer="The policy says 12 months [page 9]."), "cloud_gemma (test)", False
+
+    monkeypatch.setattr(chat, "generate_json", fake_generate)
+    result = chat.answer(
+        "How long for cataract surgery?", [], True, [],
+        document_uri="https://files.example/policy.pdf",
+    )
+    assert received["uri"] == "https://files.example/policy.pdf"
+    assert received["consent"] is True
+    assert result["model_used"] == "cloud_gemma (test)"
+    assert "12 months" in result["answer"]
+
+
+def test_full_pdf_chat_reports_cloud_errors_instead_of_faking_retrieval(monkeypatch):
+    from backend.policy import chat
+
+    def fail_generate(*args, **kwargs):
+        raise RuntimeError("rate limited")
+
+    monkeypatch.setattr(chat, "generate_json", fail_generate)
+    result = chat.answer("What is the waiting period?", [], True, [], document_uri="file-uri")
+    assert result["model_used"] == "cloud_error (RuntimeError)"
+    assert "model/API error" in result["answer"]
+
+
 def test_policy_summary_api_forwards_explicit_consent_and_source_pages(monkeypatch):
     class FakePage:
         def __init__(self, text):
@@ -322,8 +354,8 @@ def test_policy_chat_api_forwards_consent_and_history(monkeypatch):
     policy_id = policy_store.ingest_policy_pdf(b"%PDF chat fixture", "chat-policy.pdf")["policy_id"]
     received = {}
 
-    def fake_answer(question, evidence, consent, history):
-        received.update(question=question, evidence=evidence, consent=consent, history=history)
+    def fake_answer(question, evidence, consent, history, document_uri=None):
+        received.update(question=question, evidence=evidence, consent=consent, history=history, document_uri=document_uri)
         return {"answer": "Source-backed answer", "citations": [], "model_used": "test"}
 
     monkeypatch.setattr("backend.main.answer_with_policy", fake_answer)
@@ -336,3 +368,4 @@ def test_policy_chat_api_forwards_consent_and_history(monkeypatch):
     assert received["consent"] is True
     assert "room charges" in received["evidence"][0]["text"].lower()
     assert received["history"][0]["text"] == "What is the room rent limit?"
+    assert received["document_uri"] is None

@@ -69,6 +69,7 @@ from .case_store import (
     create_case,
     get_case,
     get_case_document_path,
+    get_policy_document_path,
     list_cases,
     save_case_document,
     save_case_reminder,
@@ -80,6 +81,34 @@ ALLOWED_VALIDATION_TYPES = ALLOWED_IMAGE_TYPES | {"application/pdf"}
 ALLOWED_DOMAINS = {"expense", "health_insurance"}
 
 app = FastAPI(title="ClaimGuard Enterprise API")
+
+_gemini_policy_files: dict[int, tuple[str, str]] = {}
+
+
+def _get_gemini_policy_uri(policy_id: int) -> tuple[str | None, str | None]:
+    """Upload and cache the original policy with Gemini Files API after consent."""
+    cached = _gemini_policy_files.get(policy_id)
+    if cached:
+        return cached[0], None
+    local_file = get_policy_document_path(policy_id)
+    if not local_file:
+        return None, "Original policy PDF is not available in local case storage."
+    path, filename = local_file
+    try:
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        uploaded = client.files.upload(
+            file=str(path),
+            config=types.UploadFileConfig(mime_type="application/pdf", display_name=filename),
+        )
+        if not uploaded.uri:
+            return None, "Gemini did not return a file URI for the policy PDF."
+        _gemini_policy_files[policy_id] = (uploaded.uri, uploaded.name or "")
+        return uploaded.uri, None
+    except Exception as exc:
+        return None, f"Gemini file upload failed ({type(exc).__name__})."
 
 cors_origins_env = os.environ.get("CORS_ORIGINS", "*")
 origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()] if cors_origins_env != "*" else ["*"]
@@ -353,10 +382,19 @@ async def ask_policy(policy_id: int, payload: PolicyQuestion):
         [turn["text"] for turn in history if turn["role"] == "user"] + [payload.question]
     )
     evidence = retrieve_policy_pages(policy_id, context_query)
+    document_uri = None
+    document_upload_error = None
+    if payload.allow_cloud_processing and os.environ.get("GEMINI_API_KEY"):
+        document_uri, document_upload_error = await run_in_threadpool(_get_gemini_policy_uri, policy_id)
     result = await run_in_threadpool(
-        answer_with_policy, payload.question, evidence, payload.allow_cloud_processing, history
+        answer_with_policy, payload.question, evidence, payload.allow_cloud_processing, history, document_uri
     )
-    return {"policy": policy, **result}
+    return {
+        "policy": policy,
+        **result,
+        "full_document_attached": bool(document_uri),
+        "document_upload_error": document_upload_error,
+    }
 
 
 @app.post("/api/policies/{policy_id}/summary")

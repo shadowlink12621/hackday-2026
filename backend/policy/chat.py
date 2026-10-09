@@ -54,7 +54,7 @@ def _extractive_answer(question: str, evidence: list) -> ChatResponse:
     answer += "\n\nThis is quoted policy text for guidance, not a coverage or claim-approval decision."
     return ChatResponse(answer=answer, citations=citations)
 
-def answer(question, evidence=None, allow_cloud_processing=False, history=None) -> dict:
+def answer(question, evidence=None, allow_cloud_processing=False, history=None, document_uri=None) -> dict:
     """Answers a question based on policy chunks and profile."""
     evidence = evidence or []
     history = history or []
@@ -63,9 +63,9 @@ def answer(question, evidence=None, allow_cloud_processing=False, history=None) 
         if turn.get("role") in {"user", "assistant"} and turn.get("text")
     )
     prompt = f"""
-    Answer the user's current question based ONLY on the provided policy chunks.
+    Answer the user's current question based ONLY on the attached complete policy PDF and provided policy chunks.
     Use prior dialogue only to resolve references in the current question; prior answers are not policy evidence.
-    If the answer is not in the excerpts, say "Not found in the indexed excerpts."
+    If the answer is not established by the complete policy, say so clearly.
     Do not invent answers or policies. Cite page numbers where facts are found.
 
     PRIOR DIALOGUE (context only):
@@ -77,9 +77,24 @@ def answer(question, evidence=None, allow_cloud_processing=False, history=None) 
     User Question: {question}
     """
 
-    response_obj, model_used, is_fallback = generate_json(
-        prompt, ChatResponse, allow_cloud_processing=allow_cloud_processing
-    )
+    try:
+        response_obj, model_used, is_fallback = generate_json(
+            prompt, ChatResponse, allow_cloud_processing=allow_cloud_processing,
+            document_uri=document_uri,
+        )
+    except Exception as exc:
+        source_text = _extractive_answer(question, evidence)
+        answer_text = (
+            f"Gemma could not answer from the full policy PDF ({type(exc).__name__}). "
+            "This is a model/API error, not a policy conclusion. Indexed source wording follows:\n\n"
+            f"{source_text.answer}"
+        )
+        return {
+            "answer": answer_text,
+            "citations": [citation.model_dump() for citation in source_text.citations],
+            "model_used": f"cloud_error ({type(exc).__name__})",
+            "is_fallback": True,
+        }
 
     if is_fallback:
         response_obj = _extractive_answer(question, evidence)

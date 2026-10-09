@@ -22,6 +22,7 @@ def generate_json(
     schema_cls: Type[BaseModel],
     images=None,
     allow_cloud_processing: bool = False,
+    document_uri: str | None = None,
 ) -> tuple[BaseModel, str, bool]:
     """Generates structured JSON using Gemma."""
     tier = get_active_tier(allow_cloud_processing)
@@ -33,9 +34,16 @@ def generate_json(
             model_prompt = (
                 f"{prompt}\n\nReturn only one JSON object matching this schema:\n{json_schema}"
             )
+            contents = model_prompt
+            if document_uri:
+                from google.genai import types
+                contents = [
+                    types.Part.from_uri(file_uri=document_uri, mime_type="application/pdf"),
+                    types.Part.from_text(text=model_prompt),
+                ]
             response = client.models.generate_content(
                 model=model_name,
-                contents=model_prompt,
+                contents=contents,
             )
             raw = (response.text or "").strip()
             if raw.startswith("```"):
@@ -45,6 +53,8 @@ def generate_json(
                 raw = match.group(0)
             return schema_cls.model_validate(json.loads(raw)), f"cloud_gemma ({model_name})", False
         except Exception as e:
+            if document_uri:
+                raise
             print(f"Cloud generation failed: {e}")
             tier = "offline_mock"
 

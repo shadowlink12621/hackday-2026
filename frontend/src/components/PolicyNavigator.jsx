@@ -495,9 +495,9 @@ export default function PolicyNavigator({ onModelStatusChange }) {
           <section className="card policy-chat">
             <div className="eyebrow">POLICY Q&amp;A</div>
             <h2>Ask about this document</h2>
-            <p className="muted-copy">Answers use retrieved clauses and show their PDF pages. They are not a coverage decision.</p>
+            <p className="muted-copy">With consent, the complete policy PDF is sent to Gemma 4 for each answer; indexed clauses provide page citations. Answers are not coverage decisions.</p>
             <label className="consent-line chat-consent"><input type="checkbox" checked={cloudConsent} onChange={(event) => setCloudConsent(event.target.checked)} />
-              Allow Gemma 4 to answer using retrieved policy text. Answers are not coverage decisions.
+              I consent to upload the complete policy PDF to Google Gemini/Gemma 4 for document-grounded answers. Answers are not coverage decisions.
             </label>
 
             {messages.length === 0 && (

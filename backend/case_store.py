@@ -191,3 +191,21 @@ def get_case_document_path(case_id: int, document_id: int) -> tuple[Path, str] |
         return None
     return path, row[1]
 
+
+@with_db_retry
+def get_policy_document_path(policy_id: int) -> tuple[Path, str] | None:
+    """Find the locally stored original PDF associated with an indexed policy."""
+    init_case_db()
+    with get_db_connection() as conn:
+        row = conn.execute(
+            "SELECT case_id, stored_filename, original_filename FROM case_documents "
+            "WHERE policy_id = ? AND content_type = 'application/pdf' ORDER BY id DESC LIMIT 1",
+            (policy_id,),
+        ).fetchone()
+    if not row:
+        return None
+    path = (DATA_DIR / "cases" / str(row[0]) / row[1]).resolve()
+    if DATA_DIR not in path.parents or not path.is_file():
+        return None
+    return path, row[2]
+
