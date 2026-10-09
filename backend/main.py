@@ -9,8 +9,8 @@ import time
 from typing import Any, Optional
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, PlainTextResponse
-from pydantic import BaseModel
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
+from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 
@@ -42,6 +42,7 @@ def _load_local_environment() -> None:
 _load_local_environment()
 
 from .engine import (
+    RuleResult,
     analyze_insurance_message,
     generate_claim_calendar_ics,
     get_all_claims,
@@ -148,6 +149,13 @@ async def process_request(
     except CloudModelError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     validation_result = run_deterministic_checks(extracted_data, contents, rule_settings, domain_mode)
+    if is_mock and extracted_data.confidence_score == 0:
+        validation_result.results.append(RuleResult(
+            rule_name="Model extraction unavailable",
+            passed=False,
+            message="No AI model produced evidence. Configure Cloud Gemma or local Ollama before treating this upload as analyzed.",
+        ))
+        validation_result.is_valid = False
 
     claim_id = save_claim(domain_mode, extracted_data, validation_result)
     latency_ms = int((time.time() - start_time) * 1000)
@@ -230,7 +238,8 @@ async def upload_policy(file: UploadFile = File(...)):
     if len(contents) > MAX_POLICY_PDF_BYTES:
         raise HTTPException(status_code=413, detail="Policy PDF must be 20 MB or smaller.")
     try:
-        return ingest_policy_pdf(contents, file.filename)
+        # Legacy endpoint remains local-only; image OCR requires explicit consent.
+        return ingest_policy_pdf(contents, file.filename, allow_cloud_processing=False)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -245,6 +254,11 @@ def read_policy(policy_id: int):
 
 class PolicyQuestion(BaseModel):
     question: str
+    allow_cloud_processing: bool = False
+
+
+class PolicySummaryRequest(BaseModel):
+    allow_cloud_processing: bool = False
 
 
 @app.post("/api/policies/{policy_id}/chat")
@@ -255,8 +269,116 @@ async def ask_policy(policy_id: int, payload: PolicyQuestion):
     if not policy:
         raise HTTPException(status_code=404, detail=f"Policy {policy_id} not found.")
     evidence = retrieve_policy_pages(policy_id, payload.question)
-    result = await run_in_threadpool(answer_with_policy, payload.question, evidence)
+    result = await run_in_threadpool(
+        answer_with_policy, payload.question, evidence, payload.allow_cloud_processing
+    )
     return {"policy": policy, **result}
+
+
+@app.post("/api/policies/{policy_id}/summary")
+async def summarize_policy(policy_id: int, payload: PolicySummaryRequest):
+    """Generate a whole-policy outline only after explicit cloud consent."""
+    if not get_policy(policy_id):
+        raise HTTPException(status_code=404, detail=f"Policy {policy_id} not found.")
+    pages = get_policy_pages(policy_id)
+    result = await run_in_threadpool(
+        summarize_policy_pages, pages, payload.allow_cloud_processing
+    )
+    summary = result.get("summary")
+    cited_pages = set()
+    if summary:
+        for key, value in summary.items():
+            if isinstance(value, list):
+                for fact in value:
+                    cited_pages.update(fact.get("pages", []))
+            elif isinstance(value, dict):
+                cited_pages.update(value.get("pages", []))
+    sources = [page for page in pages if page["page"] in cited_pages]
+    return {**result, "sources": sources}
+
+
+class CaseCreateRequest(BaseModel):
+    patient_name: str = Field(min_length=1, max_length=120)
+    age: int | None = Field(default=None, ge=0, le=120)
+    weight_kg: float | None = Field(default=None, gt=0, le=500)
+    blood_group: str | None = Field(default=None, max_length=8)
+    medical_conditions: list[str] = Field(default_factory=list, max_length=40)
+    additional_details: dict[str, str] = Field(default_factory=dict)
+
+
+@app.post("/api/cases", status_code=201)
+def create_case_endpoint(payload: CaseCreateRequest):
+    """Create a local patient case; optional health details are user-provided, never inferred."""
+    details = payload.model_dump(exclude={"patient_name"})
+    case_id = create_case(payload.patient_name, details)
+    return get_case(case_id)
+
+
+@app.get("/api/cases")
+def list_cases_endpoint():
+    return list_cases()
+
+
+@app.get("/api/cases/{case_id}")
+def read_case_endpoint(case_id: int):
+    result = get_case(case_id)
+    if not result:
+        raise HTTPException(status_code=404, detail=f"Case {case_id} not found.")
+    return result
+
+
+@app.post("/api/cases/{case_id}/documents", status_code=201)
+async def upload_case_document(
+    case_id: int,
+    file: UploadFile = File(...),
+    category: str = Form("other"),
+    allow_cloud_processing: bool = Form(False),
+):
+    """Store a case file locally and index policy PDFs for citation-backed questions."""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="A document filename is required.")
+    if category not in DOCUMENT_CATEGORIES:
+        raise HTTPException(status_code=400, detail="Unsupported document category.")
+    if not get_case(case_id):
+        raise HTTPException(status_code=404, detail=f"Case {case_id} not found.")
+    content_type = file.content_type or "application/octet-stream"
+    if content_type not in ALLOWED_DOCUMENT_TYPES:
+        raise HTTPException(status_code=400, detail="Only PDF, JPEG, and PNG files are supported.")
+    contents = await file.read(MAX_DOCUMENT_BYTES + 1)
+    if len(contents) > MAX_DOCUMENT_BYTES:
+        raise HTTPException(status_code=413, detail="Documents must be 20 MB or smaller.")
+
+    policy_id = None
+    policy_index = None
+    if category == "policy":
+        if content_type != "application/pdf":
+            raise HTTPException(status_code=400, detail="Policy documents must be PDF files.")
+        try:
+            policy_index = ingest_policy_pdf(contents, file.filename, allow_cloud_processing)
+            policy_id = policy_index["policy_id"]
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
+        saved = save_case_document(case_id, category, file.filename, content_type, contents, policy_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not saved:
+        raise HTTPException(status_code=404, detail=f"Case {case_id} not found.")
+    return {
+        **saved,
+        "policy": get_policy(policy_id) if policy_id else None,
+        "indexing": policy_index,
+        "storage": "local",
+    }
+
+
+@app.get("/api/cases/{case_id}/documents/{document_id}/download")
+def download_case_document(case_id: int, document_id: int):
+    result = get_case_document_path(case_id, document_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    path, filename = result
+    return FileResponse(path, filename=filename)
 
 class ScamCheckRequest(BaseModel):
     message_text: str

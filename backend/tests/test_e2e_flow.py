@@ -4,7 +4,8 @@ from fastapi.testclient import TestClient
 
 from backend import engine
 from backend.main import app
-from backend.scripts.seed_demo_claims import seed_demo_claims
+import backend.main as main
+from backend.gemma_client import ClaimExtraction, LineItem
 
 
 client = TestClient(app)
@@ -18,26 +19,25 @@ def isolate_test_db(tmp_path, monkeypatch):
     engine.init_db()
 
 
-def test_full_e2e_claims_lifecycle():
+def test_full_e2e_claims_lifecycle(monkeypatch):
     # 1. Healthcheck
     health_resp = client.get("/api/health")
     assert health_resp.status_code == 200
     assert health_resp.json()["status"] == "ok"
 
-    # 2. Seed initial demo claims
-    seed_count = seed_demo_claims()
-    assert seed_count == 4
-
-    # Running seed a second time should be idempotent (0 new claims)
-    reseed_count = seed_demo_claims()
-    assert reseed_count == 0
-
-
-    # 3. Verify seeded claims are listed in GET /api/claims
+    # Demo history stays empty until an actual upload is processed.
     claims_resp = client.get("/api/claims")
     assert claims_resp.status_code == 200
-    claims = claims_resp.json()
-    assert len(claims) == 4
+    assert claims_resp.json() == []
+
+    extracted = ClaimExtraction(
+        provider_name="Test Cafe",
+        currency="INR",
+        items=[LineItem(description="Coffee", amount=8.5, category="meals")],
+        total_extracted=8.5,
+        confidence_score=0.9,
+    )
+    monkeypatch.setattr(main, "extract_form_data", lambda *args: (extracted, False, "test-fixture"))
 
     # 4. Upload and validate a new claim via POST /api/validate
     sample_file_bytes = b"fake_png_header_and_pixels_for_e2e_test_receipt"
@@ -89,5 +89,4 @@ def test_full_e2e_claims_lifecycle():
     assert "text/csv" in csv_resp.headers["content-type"]
     csv_text = csv_resp.text
     assert "claimguard_audit.csv" in csv_resp.headers["content-disposition"]
-    assert "Starbucks Coffee" in csv_resp.text
-    assert "Apollo Hospital Bangalore" in csv_resp.text
+    assert "Test Cafe" in csv_text

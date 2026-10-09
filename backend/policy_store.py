@@ -4,12 +4,11 @@ import hashlib
 import re
 import sqlite3
 from datetime import datetime, timezone
-from io import BytesIO
 from typing import Any
 
-from pypdf import PdfReader
-
 from .engine import get_db_connection, with_db_retry
+from .gemma_client import CloudModelError, extract_pdf_image_text
+from .pdf_processing import extract_pdf_pages
 
 MAX_POLICY_PDF_BYTES = 20 * 1024 * 1024
 MAX_POLICY_PAGES = 300
@@ -88,25 +87,52 @@ def _infer_insurer(all_text: str) -> str | None:
 
 
 @with_db_retry
-def ingest_policy_pdf(pdf_bytes: bytes, filename: str) -> dict[str, Any]:
+def ingest_policy_pdf(
+    pdf_bytes: bytes, filename: str, allow_cloud_processing: bool = False
+) -> dict[str, Any]:
     if not pdf_bytes or len(pdf_bytes) > MAX_POLICY_PDF_BYTES:
         raise ValueError("Policy PDF must be non-empty and no larger than 20 MB.")
     if not pdf_bytes.startswith(b"%PDF"):
         raise ValueError("The uploaded file is not a valid PDF document.")
 
     try:
-        reader = PdfReader(BytesIO(pdf_bytes))
-        if len(reader.pages) > MAX_POLICY_PAGES:
+        extracted_pages = extract_pdf_pages(pdf_bytes)
+        if len(extracted_pages) > MAX_POLICY_PAGES:
             raise ValueError(f"Policy PDFs are limited to {MAX_POLICY_PAGES} pages.")
-        pages = [(i + 1, (page.extract_text() or "").strip()) for i, page in enumerate(reader.pages)]
     except ValueError:
         raise
     except Exception as exc:
         raise ValueError("Could not read this PDF. Please check that it is not encrypted or damaged.") from exc
 
+    image_inputs = [
+        (page["page"], image["bytes"], image["mime_type"])
+        for page in extracted_pages
+        for image in page["images"]
+    ]
+    image_pages = {page["page"] for page in extracted_pages if page["images"]}
+    scanned_image_pages = {
+        page["page"] for page in extracted_pages
+        if not page["text"] and page["images"]
+    }
+    if scanned_image_pages and not allow_cloud_processing:
+        raise ValueError(
+            "This PDF has scanned pages. Enable cloud-processing consent before upload so Gemma can read those page images."
+        )
+    ocr_by_page = {}
+    if image_inputs and allow_cloud_processing:
+        try:
+            ocr_by_page = extract_pdf_image_text(image_inputs, len(extracted_pages))
+        except CloudModelError as exc:
+            raise ValueError(str(exc)) from exc
+
+    pages = [
+        (page["page"], "\n\n".join(text for text in (page["text"], ocr_by_page.get(page["page"], "")) if text))
+        for page in extracted_pages
+    ]
+
     nonempty = [(number, text) for number, text in pages if text]
     if not nonempty:
-        raise ValueError("This PDF has no extractable text. Scanned PDFs need OCR before indexing.")
+        raise ValueError("Gemma could not extract readable text from this PDF. Try a clearer searchable PDF or image.")
 
     content_hash = hashlib.sha256(pdf_bytes).hexdigest()
     insurer = _infer_insurer("\n".join(text for _, text in nonempty))
@@ -140,6 +166,9 @@ def ingest_policy_pdf(pdf_bytes: bytes, filename: str) -> dict[str, Any]:
         "imported_at": row[4],
         "duplicate_upload": bool(existing),
         "indexed_pages": len(nonempty),
+        "ocr_pages": sorted(image_pages & set(ocr_by_page)),
+        "unreadable_image_pages": sorted(image_pages - set(ocr_by_page)),
+        "image_ocr_consent_needed": sorted(image_pages - set(ocr_by_page)) if not allow_cloud_processing else [],
     }
 
 
@@ -160,11 +189,23 @@ def get_policy(policy_id: int) -> dict[str, Any] | None:
         "insurer": row[3],
         "imported_at": row[4],
     }
+    # Build this profile from the uploaded policy, not a particular insurer's demo fixture.
     profile_queries = (
-        ("cataract", "Cataract waiting period"),
-        ("refractive error eyesight dioptres", "Vision correction exclusion"),
-        ("OPD frames lenses contact lenses", "OPD and optical expenses"),
-        ("room rent per day sum insured", "Room rent limit"),
+        ("insurer product plan policy wording schedule version", "Policy identity and plan"),
+        ("policy period inception date commencement expiry renewal", "Policy dates and renewal"),
+        ("insured member name proposer relationship family members", "Insured members"),
+        ("sum insured family floater individual cover available balance", "Sum insured and cover structure"),
+        ("pre existing disease PED waiting period years", "Pre-existing condition waiting periods"),
+        ("specific illness disease procedure waiting period", "Specific illness waiting periods"),
+        ("general exclusions permanent exclusions not payable", "Exclusions"),
+        ("room rent ICU limit cap proportionate deduction", "Room rent and ICU limits"),
+        ("co-payment copay deductible threshold percentage", "Co-pay and deductible"),
+        ("network hospital cashless provider hospital criteria", "Hospital network and eligibility"),
+        ("pre hospitalization post hospitalization days", "Pre- and post-hospitalization benefits"),
+        ("OPD outpatient dental optical vision benefit sublimit", "OPD, dental, and vision benefits"),
+        ("consumables non medical items add-on payable", "Consumables and add-ons"),
+        ("claim intimation submission documents discharge deadline reimbursement", "Claim process and required documents"),
+        ("cataract refractive error eyesight lenses", "Eye-care terms"),
     )
     profile = []
     for query, topic in profile_queries:
@@ -183,6 +224,18 @@ def get_policy(policy_id: int) -> dict[str, Any] | None:
             })
     policy["facts"] = profile
     return policy
+
+
+@with_db_retry
+def get_policy_pages(policy_id: int) -> list[dict[str, Any]]:
+    """Return locally indexed pages with common personal identifiers redacted."""
+    init_policy_db()
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            "SELECT page_number, page_text FROM policy_pages WHERE policy_id = ? ORDER BY page_number",
+            (policy_id,),
+        ).fetchall()
+    return [{"page": row[0], "text": _redact_text(row[1])} for row in rows]
 
 
 def retrieve_policy_pages(policy_id: int, question: str, limit: int = MAX_RETRIEVAL_PAGES) -> list[dict[str, Any]]:

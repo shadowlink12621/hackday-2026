@@ -178,6 +178,8 @@ Returns runtime AI model status (Cloud Gemma 4 vs Local Ollama Gemma vs Offline 
 ```json
 {
   "cloud_gemma_available": true,
+  "cloud_gemma_configured": true,
+  "cloud_connectivity_checked": false,
   "cloud_model": "gemma-4-26b-a4b-it",
   "local_ollama_online": false,
   "local_ollama_host": "http://localhost:11434",
@@ -197,14 +199,32 @@ Downloads an audit-compliant CSV report with formula-injection sanitization.
 ## 9. Policy PDF and Evidence Chat
 
 ### `POST /api/policies`
-Accepts one `application/pdf` upload (maximum 20 MB and 300 pages). The server extracts text page-by-page, indexes it in the local SQLite database, and does not retain the original PDF bytes. Scanned/image-only PDFs return `422` until OCR support is available. Identical PDFs return the existing policy ID.
+Accepts one `application/pdf` upload (maximum 20 MB and 300 pages). The server extracts text page-by-page and indexes it in the local SQLite database; this endpoint does not retain the original PDF bytes. Scanned/image-only PDFs return `422` until OCR support is available. Identical PDFs return the existing policy ID. The case-document endpoint separately saves uploaded source files under ignored local `data/cases/` storage.
 
-Response fields include `policy_id`, `filename`, `page_count`, `insurer`, `duplicate_upload`, `indexed_pages`, and a profile with evidence page numbers.
+Response fields include `policy_id`, `filename`, `page_count`, `insurer`, `duplicate_upload`, `indexed_pages`, and a profile with evidence page numbers. The profile is retrieved from the uploaded policy and includes identity, policy dates, insured members, cover structure, waiting periods, exclusions, limits, hospital criteria, benefits, and claim-document terms only when matching text is found. It is not an exhaustive or verified policy schedule extraction.
 
 ### `GET /api/policies/{policy_id}`
 Returns policy metadata and source-backed profile facts.
 
 ### `POST /api/policies/{policy_id}/chat`
-Request: `{"question": "What does the policy say about cataract?"}`.
+Request: `{"question": "What does the policy say about cataract?", "allow_cloud_processing": false}`. Cloud generation is opt-in; the default is source-only. Chat sends only relevant redacted passages after consent.
 
-Response: `{"policy": {...}, "answer": "... [page 9]", "citations": [{"page": 9, "excerpt": "..."}], "model_used": "cloud_gemma (...)"}`. The chat receives retrieved excerpts only. Without a configured model it returns retrieved evidence and states that no generated conclusion was made. It must not infer approval, coverage, or payment where the text does not establish it.
+Response: `{"policy": {...}, "answer": "... [page 9]", "citations": [{"page": 9, "excerpt": "..."}], "model_used": "cloud_gemma (...)"}`. Without consent or a configured model it returns retrieved evidence and states that no generated conclusion was made. It must not infer approval, coverage, or payment where the text does not establish it.
+
+### `POST /api/policies/{policy_id}/summary`
+
+Request: `{"allow_cloud_processing": true}`. One whole-policy outline request is sent only after explicit consent, when a cloud model is configured, and within a text-size guard. The locally indexed page text is redacted before transmission. The response includes structured facts, cited page numbers, source excerpts, and `model_used`; oversized, unconfigured, or failed requests return `summary: null` and `model_used: "retrieval_only"`. Verify all extracted facts against the PDF; this is not an exhaustive underwriting interpretation.
+
+## 10. Local Patient Cases and Documents
+
+- `POST /api/cases`: create a case from `patient_name` plus optional `age`, `weight_kg`, `blood_group`, `medical_conditions`, and `additional_details`. These health details are user-provided and optional; the API does not infer diagnoses.
+- `GET /api/cases`: list local cases and document counts.
+- `GET /api/cases/{case_id}`: return one case and linked document metadata.
+- `POST /api/cases/{case_id}/documents`: multipart `file` and `category`. Categories: `policy`, `lab_report`, `discharge_summary`, `bill`, `prescription`, `other`. PDF/JPEG/PNG up to 20 MB are saved locally under ignored `data/cases/`; policy PDFs are also indexed for evidence chat.
+- `GET /api/cases/{case_id}/documents/{document_id}/download`: retrieve a document linked to that case.
+
+The case APIs are a local single-user demo surface; they do not implement authentication or multi-user access control. Do not expose them publicly with real health data. OCR, medical-result interpretation, dynamic lifestyle questionnaires, automatic deadline calculation, and auth are not yet implemented. The consent control and summary endpoint exist, but a successful live cloud request still needs local credentials and verification.
+
+## 11. Model and Privacy Configuration
+
+The backend loads an ignored root `.env` file. Copy `.env.example` to `.env`, then configure `GEMINI_API_KEY` and `GEMMA_MODEL` locally. Never paste keys into source, browser code, chat, or Git. Before any cloud service processes policy/health content, the UI must explain the data flow and collect explicit consent. No key is configured in the current development environment, so live cloud model behavior remains unverified. Offline claim extraction returns an empty, zero-confidence result, never a fabricated patient or bill.

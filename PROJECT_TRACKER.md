@@ -35,10 +35,9 @@ This is the unified project tracking board for the ClaimGuard team.
 - [x] **Local Insurer Knowledge Base**: Build markdown knowledge base (`backend/knowledge/`) for HDFC ERGO, Star Health, Niva Bupa, Care Health, ICICI Lombard, and SBI General with real-world claim repudiation traps (lifestyle/smoking disclosures, room rent proportional deductions, 15-bed minimums, consumables exclusions).
 - [x] **Benefit & Deadline Calendar Engine**: Generate RFC 5545 `.ics` reminders (`GET /api/claims/{id}/calendar.ics`); generic intervals are now labeled provisional, not statutory or policy deadlines.
 - [x] **ScamCheck Engine**: Analyze SMS, email, and WhatsApp messages for insurance refund fee extortion (`POST /api/scamcheck`) referencing IRDAI Bima Bharosa warnings.
-- [x] **Hybrid Gemma Architecture**: Support Cloud Gemma 4, Local Ollama open-source Gemma (`http://localhost:11434`), and offline structured mock fallback with `GET /api/model/status`.
+- [x] **Hybrid Gemma Architecture**: Support Cloud Gemma 4, Local Ollama open-source Gemma (`http://localhost:11434`), and a non-fabricating offline unavailable state with `GET /api/model/status`.
 - [x] **Interactive Claim Chat**: Add `POST /api/chat` to allow conversational Q&A with Gemma about specific audited claims.
 - [x] **Developer Scripts**:
-  - `backend/scripts/seed_demo_claims.py`: Idempotent seeder with 4 realistic claims.
   - `backend/scripts/validate_insurer_knowledge.py`: Validates all 6 insurer trap files.
   - `backend/scripts/benchmark_gemma.py`: Multi-tier benchmark utility for Gemma.
   - `backend/scripts/validate_cli.py`: Standalone CLI claim validator.
@@ -48,9 +47,18 @@ This is the unified project tracking board for the ClaimGuard team.
 - [x] Store extracted policy text locally; deduplicate repeat uploads and do not retain source PDF bytes.
 - [x] Add retrieval-backed profile and policy chat APIs with page citations.
 - [x] Keep offline replies extractive and explicit when no language model is available.
-- [x] Add redacted policy UI fixture and detailed Person B handoff.
-- [x] Complete backend test suite (25 passed) and verify upload/chat against the local 59-page sample in a temporary database.
-- [ ] Person B implements policy upload/profile cards, citation chat, model mode, and reminder UI on `feat/frontend`.
+- [x] Add source-backed policy UI and detailed Person B handoff.
+- [x] Replace the four-topic sample profile with an upload-derived 15-topic evidence profile.
+- [x] Add local patient cases with isolated case metadata, document uploads/downloads, and case-linked policy indexing.
+- [x] Make offline extraction report “Not extracted” with zero confidence instead of fake sample patients/bills.
+- [x] Add explicit-consent, redacted whole-policy outline generation with schema validation and page citations.
+- [x] Load model credentials from ignored `.env`; do not commit keys.
+- [x] Verify case/document APIs and the local 59-page SBI policy using temporary DB/storage; profile returns indexed evidence and chat citations.
+- [x] Verify no-model claim uploads cannot be marked approved; backend suite currently 33 passing.
+- [ ] Configure a real API key locally and verify a live model request; no key is currently configured.
+- [x] Replace in-progress sample policy/patient/chat UI with empty states, case selection, API-backed policy/documents, source citations, runtime status, and cloud-consent controls.
+- [x] Remove canned scam/policy fallback answers and remove PDF acceptance from the image-only claim control.
+- [ ] Implement medical-record AI interpretation, OCR, robust policy-holder/member identity extraction, server-persisted reminders, and auth before public deployment with personal data.
 
 ---
 
@@ -73,12 +81,20 @@ This is the unified project tracking board for the ClaimGuard team.
 - [x] Test an approved corporate expense and a flagged health insurance claim with mocked API responses.
 - [x] Test CSV download and display of backend validation errors.
 - [x] Run Playwright flows successfully.
+- [x] Add case/policy/chat flow browser test; latest serial Playwright run passed 5/5.
 
 ### Stage 4: Local Docker Deployment
 - [x] Add multi-stage frontend Dockerfile (Vite build + static server on port 5173).
 - [x] Add backend Dockerfile (Python 3.11 on port 8000).
 - [x] Add `docker-compose.yml` with persistent volume and health check.
 - [x] Add DigitalOcean App Platform deployment configuration (`do-app.yaml`).
+
+### Stage 5: Patient Case & Policy Outline
+- [x] Build API-backed patient registration and per-case local document storage.
+- [x] Replace placeholder policy facts and chat answers with uploaded-policy evidence, cited chat, and explicit cloud consent.
+- [x] Remove static scam examples and canned fallback verdicts.
+- [x] Add user-confirmed date and local `.ics` export without assuming a statutory/policy deadline.
+- [ ] Merge these UI changes from `feat/core-ai` into `feat/frontend` so Person B can continue demo polish.
 
 ---
 

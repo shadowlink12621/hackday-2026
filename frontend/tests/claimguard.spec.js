@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 const expenseResponse = {
   claim_id: 101,
   metadata: {
-    model_used: 'gemini-2.5-flash',
+    model_used: 'cloud_gemma (gemma-4-26b-a4b-it)',
     is_fallback_mock: false,
     latency_ms: 42,
     timestamp: '2026-10-09T10:00:00Z',
@@ -34,7 +34,7 @@ const expenseResponse = {
 const healthResponse = {
   claim_id: 202,
   metadata: {
-    model_used: 'gemini-2.5-flash',
+    model_used: 'cloud_gemma (gemma-4-26b-a4b-it)',
     is_fallback_mock: false,
     latency_ms: 58,
     timestamp: '2026-10-09T10:05:00Z',

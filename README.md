@@ -20,7 +20,7 @@ Instead of relying on fragile legacy OCR or trusting black-box LLM arithmetic, C
 ## Key Features
 
 - **Multimodal Perception:** Prompt-engineered Gemma 4 extraction with prompt-injection defenses (untrusted document sandboxing).
-- **Graceful Server-Side Fallback:** Automatically switches to structured offline mock mode when offline or without an API key, ensuring reliable demo and review execution.
+- **Honest Offline Handling:** When no model is reachable, reports that extraction is unavailable instead of creating a fictional claim.
 - **Deterministic Math & Policy Engine:** Strict arithmetic validation separating AI perception from mathematical proof.
 - **Cryptographic Duplicate Ledger:** Instant duplicate submission detection using SHA-256 image hashes stored in SQLite with WAL mode and concurrency retry handling.
 - **Configurable Policies:** Dynamic rule settings for expense caps, health insurance room-rent caps, and exclusions for non-medical consumables.
@@ -75,7 +75,7 @@ source .venv/bin/activate
 # Install dependencies
 pip install -r backend/requirements.txt
 
-# Configure environment (optional - runs in mock fallback mode if omitted)
+# Configure environment for cloud Gemma extraction
 $env:GEMINI_API_KEY = "your-gemini-api-key"
 $env:GEMMA_MODEL = "gemma-4-26b-a4b-it"
 
@@ -85,15 +85,7 @@ python -m uvicorn backend.main:app --reload --port 8000
 
 Verify backend health: [http://localhost:8000/api/health](http://localhost:8000/api/health)
 
-### 2. Seed Demo Claims (Optional)
-
-To populate the local ledger with 4 representative demo claims (corporate expenses and hospital bills):
-
-```bash
-python -m backend.scripts.seed_demo_claims
-```
-
-### 3. Frontend Setup & Run
+### 2. Frontend Setup & Run
 
 In a separate terminal:
 

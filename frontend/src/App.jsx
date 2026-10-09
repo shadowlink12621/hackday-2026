@@ -11,7 +11,7 @@ import FeatureShaderCards from './components/ui/feature-shader-cards';
 import BenefitCalendar from './components/BenefitCalendar';
 import ScamCheck from './components/ScamCheck';
 import InsurerKnowledge from './components/InsurerKnowledge';
-import PolicyNavigatorTab from './components/PolicyNavigatorTab';
+import PolicyNavigator from './components/PolicyNavigator';
 
 const appTabs = [
   { id: 'navigator', label: 'Policy Navigator' },
@@ -22,6 +22,7 @@ const appTabs = [
 ];
 
 function App() {
+  const [activeTab, setActiveTab] = useState('claims');
   const [file, setFile] = useState(null);
   const [domainMode, setDomainMode] = useState('expense');
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -29,7 +30,6 @@ function App() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [claimsHistory, setClaimsHistory] = useState([]);
-  const [activeTab, setActiveTab] = useState('claims');
   const [modelStatus, setModelStatus] = useState(null);
   const [actionLoadingId, setActionLoadingId] = useState(null);
 
@@ -68,10 +68,10 @@ function App() {
 
   const handleAnalyze = async () => {
     if (!file) return;
-    
+
     setLoading(true);
     setError(null);
-    
+
     try {
       const data = await validateDocument(file, domainMode);
       setResult(data);
@@ -112,8 +112,8 @@ function App() {
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
-    } catch (err) {
-      alert("Failed to download CSV");
+    } catch {
+      alert('Failed to download CSV');
     }
   };
 
@@ -124,15 +124,66 @@ function App() {
       <main className="page">
         <div className="hero">
           <div>
-            <div className="eyebrow">DOCUMENT PROCESSING ENGINE</div>
-            <h1>Automate Expense & Health Claims</h1>
-            <p className="subtitle">Upload a receipt or medical bill. Gemma 4 extracts the data, and our deterministic Python engine verifies fraud hashes and policy limits in real-time.</p>
+            <div className="eyebrow">CLAIMGUARD · BENEFIT & READINESS COMPANION</div>
+            <h1>Insurance Claim Readiness & Benefit Navigator</h1>
+            <p className="subtitle">
+              Keep each patient’s policy and supporting documents together. Review source pages and confirm important details before acting.
+            </p>
           </div>
           <div className="hero-stat">
             <span>MODEL</span>
             <strong>{modelStatus?.active_backend === 'cloud_gemma' ? 'Cloud Gemma 4' : modelStatus?.active_backend === 'local_ollama' ? 'Local Ollama Gemma' : modelStatus?.active_backend === 'offline_mock' ? 'Offline fallback' : 'Checking model…'}</strong>
             <small>{modelStatus?.active_backend === 'offline_mock' ? 'Offline mode ready' : modelStatus ? 'Runtime model status' : 'Waiting for backend'}</small>
           </div>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '12px' }}>
+          <button
+            onClick={() => setActiveTab('claims')}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '6px',
+              border: activeTab === 'claims' ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.1)',
+              background: activeTab === 'claims' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(255,255,255,0.03)',
+              color: activeTab === 'claims' ? '#38bdf8' : '#94a3b8',
+              fontWeight: 600,
+              fontSize: '13px',
+              cursor: 'pointer',
+            }}
+          >
+            📄 Expense & Bill Auditor
+          </button>
+          <button
+            onClick={() => setActiveTab('policy')}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '6px',
+              border: activeTab === 'policy' ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.1)',
+              background: activeTab === 'policy' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.03)',
+              color: activeTab === 'policy' ? '#10b981' : '#94a3b8',
+              fontWeight: 600,
+              fontSize: '13px',
+              cursor: 'pointer',
+            }}
+          >
+            🏥 Patient Cases & Policy
+          </button>
+          <button
+            onClick={() => setActiveTab('scam')}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '6px',
+              border: activeTab === 'scam' ? '1px solid #ef4444' : '1px solid rgba(255,255,255,0.1)',
+              background: activeTab === 'scam' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(255,255,255,0.03)',
+              color: activeTab === 'scam' ? '#ef4444' : '#94a3b8',
+              fontWeight: 600,
+              fontSize: '13px',
+              cursor: 'pointer',
+            }}
+          >
+            🛡️ ScamCheck (IRDAI Bima Bharosa)
+          </button>
         </div>
 
         {error && (
@@ -149,7 +200,7 @@ function App() {
         <div className="notice notice-info pdf-notice" role="status">
           <div>
             <strong>PDF detected</strong>
-            <p style={{ margin: '4px 0 0' }}>After submission, ClaimGuard will scan its searchable text and show policy highlights, claim traps, and next steps.</p>
+            <p style={{ margin: '4px 0 0' }}>ClaimGuard reads searchable text across every page and sends readable page images to Gemma for extraction. Scanned pages are read as images when cloud Gemma is enabled.</p>
           </div>
         </div>
       )}
@@ -218,7 +269,7 @@ function App() {
         )}
         {activeTab === 'navigator' && (
           <div id="panel-navigator" className="app-tab-panel" role="tabpanel" aria-labelledby="tab-navigator" tabIndex={0}>
-            <PolicyNavigatorTab />
+            <PolicyNavigator />
           </div>
         )}
       </main>

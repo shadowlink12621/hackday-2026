@@ -65,7 +65,7 @@ export default function UploadZone({
           type="file" 
           ref={fileInputRef} 
           onChange={handleFileChange} 
-          accept="image/*,application/pdf"
+          accept="image/jpeg,image/png,application/pdf,.jpg,.jpeg,.png,.pdf"
         />
         
         {file?.type === 'application/pdf' ? (

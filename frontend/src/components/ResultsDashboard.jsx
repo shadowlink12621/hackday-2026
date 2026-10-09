@@ -13,7 +13,7 @@ export default function ResultsDashboard({ result, loading }) {
           <h2>{result?.metadata?.document_type === 'policy_document' ? 'Policy document guide' : 'Validation Results'}</h2>
         </div>
         {result && result.metadata && result.metadata.is_fallback_mock && (
-          <div className="mock-tag">{result.metadata.document_type === 'policy_document' ? 'KEYWORD SCAN' : 'MOCK DATA'}</div>
+          <div className="mock-tag">{result.metadata.document_type === 'policy_document' ? 'KEYWORD SCAN' : 'OFFLINE · NOT EXTRACTED'}</div>
         )}
       </div>
       
@@ -21,7 +21,7 @@ export default function ResultsDashboard({ result, loading }) {
         <div className="empty-state">
           <div className="empty-icon">▨</div>
           <strong>No Active Claim</strong>
-          <p>Upload a document on the left to see Gemma 4 extraction and engine verification.</p>
+          <p>Upload a receipt image to see the configured model result and deterministic checks.</p>
         </div>
       )}
       

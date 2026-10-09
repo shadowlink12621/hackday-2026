@@ -66,6 +66,45 @@ export async function getCase(id) {
   return response.json();
 }
 
+export async function getCases() {
+  const response = await request('/cases');
+  return response.json();
+}
+
+export function getCaseDocumentUrl(caseId, documentId) {
+  return `${API}/cases/${encodeURIComponent(caseId)}/documents/${encodeURIComponent(documentId)}/download`;
+}
+
+export async function uploadCaseDocument(caseId, file, category, allowCloudProcessing = false) {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('category', category);
+  form.append('allow_cloud_processing', String(allowCloudProcessing));
+  const response = await request(`/cases/${encodeURIComponent(caseId)}/documents`, {
+    method: 'POST',
+    body: form,
+  });
+  return response.json();
+}
+
+export async function askPolicy(policyId, question, allowCloudProcessing = false) {
+  const response = await request(`/policies/${encodeURIComponent(policyId)}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question, allow_cloud_processing: allowCloudProcessing }),
+  });
+  return response.json();
+}
+
+export async function generatePolicySummary(policyId, allowCloudProcessing = false) {
+  const response = await request(`/policies/${encodeURIComponent(policyId)}/summary`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ allow_cloud_processing: allowCloudProcessing }),
+  });
+  return response.json();
+}
+
 export async function uploadPolicy(caseId, file) {
   const form = new FormData();
   form.append('file', file);
@@ -78,14 +117,8 @@ export async function uploadPolicy(caseId, file) {
 }
 
 export async function getPolicy(policyId) {
-  try {
-    const response = await request(`/policies/${encodeURIComponent(policyId)}`);
-    return await response.json();
-  } catch (err) {
-    console.warn("Backend missing policy, using mock policy report for demo.");
-    const mock = await import('./mocks/policyReport.sample.json');
-    return mock.default;
-  }
+  const response = await request(`/policies/${encodeURIComponent(policyId)}`);
+  return response.json();
 }
 
 export async function addEvent(caseId, eventData) {
@@ -102,23 +135,6 @@ export function getCaseIcsUrl(caseId) {
 }
 
 export async function chatCase(policyId, question) {
-  // If offline/mock mode, we can't hit the backend with a mock string ID
-  if (policyId === 'mock_case_123' || typeof policyId === 'string') {
-    // Return mock response based on the question
-    const q = question.toLowerCase();
-    if (q.includes("cataract")) {
-      return { answer: "The Customer Information Sheet lists a 12-month specific waiting period for cataract, with an accident exception noted in the wording. This alone does not establish coverage or payout.", citations: [{page: 9, quote: "12-month specific waiting period for cataract"}] };
-    } else if (q.includes("eyesight correction") || q.includes("refractive")) {
-      return { answer: "Refractive error is listed as an exclusion. Detailed wording describes an exclusion for eyesight correction due to refractive error below 7.5 dioptres. Check exact treatment and policy version.", citations: [{page: 4, quote: "Exclusion listed"}, {page: 35, quote: "correction below 7.5 dioptres"}] };
-    } else if (q.includes("room-rent cap") || q.includes("room rent")) {
-      return { answer: "The schedule text is contradictory regarding room rent. Please verify the applicable plan/schedule visually before calculating.", citations: [{page: 3, quote: "room-rent limit entry / no room rent capping"}] };
-    } else if (q.includes("pay my entire eye bill")) {
-      return { answer: "The indexed wording does not establish a guaranteed payout. Please provide the procedure, active schedule, and claim facts.", citations: [] };
-    } else {
-      return { answer: "Not found in the indexed excerpts.", citations: [] };
-    }
-  }
-
   const response = await request(`/policies/${encodeURIComponent(policyId)}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -149,6 +165,10 @@ export async function fetchInsurerKnowledge(insurerKey) {
 export async function fetchModelStatus() {
   const response = await request('/model/status');
   return response.json();
+}
+
+export async function getModelStatus() {
+  return fetchModelStatus();
 }
 
 export async function fetchClaims() {
