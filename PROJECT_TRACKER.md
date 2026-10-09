@@ -68,6 +68,7 @@ This is the shared checklist for the Hack Day team. Check the current branch and
 - [x] Add ScamCheck with a risk score, red flags, and IRDAI guidance.
 - [x] Add insurer knowledge cards with claim gotchas and official portal links.
 - [x] Add a live Cloud Gemma / Local Ollama / Offline model status badge.
+- [x] Add Gemma extraction benchmarking, CLI validation, and insurer knowledge validation utilities.
 
 ## Run the Local Demo
 
