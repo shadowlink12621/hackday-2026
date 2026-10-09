@@ -66,7 +66,6 @@ function App() {
     try {
       const data = await processDocument(file, domainMode);
       setResult(data);
-      // Reload history to show the newly added claim
       await loadHistory();
     } catch (err) {
       setError(err.message || 'Failed to connect to the backend.');
@@ -75,16 +74,15 @@ function App() {
     }
   };
 
-  const handleDecision = async (decision) => {
-    if (!result || !result.claim_id) return;
-    
+  const handleDecision = async (claimId, decision) => {
     try {
-      await saveDecision(result.claim_id, decision);
-      alert(`Claim ${decision} successfully!`);
-      setResult(null);
-      setFile(null);
-      setPreviewUrl(null);
+      await saveDecision(claimId, decision);
       await loadHistory();
+      if (result && result.claim_id === claimId) {
+        setResult(null);
+        setFile(null);
+        setPreviewUrl(null);
+      }
     } catch (err) {
       alert("Failed to submit decision");
     }
@@ -109,208 +107,267 @@ function App() {
 
   return (
     <>
-      <header>
-        <h1>ClaimGuard</h1>
-        <p>Universal AI Claims Validator (Expenses & Health Insurance)</p>
+      <header className="topbar">
+        <a href="/" className="brand">
+          <div className="brand-mark">cg</div>
+          <div>
+            ClaimGuard <span className="brand-accent">AI</span>
+            <small>UNIVERSAL VALIDATOR</small>
+          </div>
+        </a>
+        <div className="topbar-right">
+          <span className="track-label">STAGE 2: INTEGRATION</span>
+          <div className="connection online">
+            <i></i> ONLINE
+          </div>
+        </div>
       </header>
       
-      <main className="container">
-        {/* Left Panel: Input & History */}
-        <section className="panel">
-          <h2>Input Claim</h2>
+      <main className="page">
+        <div className="hero">
+          <div>
+            <div className="eyebrow">DOCUMENT PROCESSING ENGINE</div>
+            <h1>Automate Expense & Health Claims</h1>
+            <p className="subtitle">Upload a receipt or medical bill. Gemma 4 extracts the data, and our deterministic Python engine verifies fraud hashes and policy limits in real-time.</p>
+          </div>
+          <div className="hero-stat">
+            <span>MODEL</span>
+            <strong>Gemma 2.5 Flash</strong>
+            <small>Multimodal Extraction</small>
+          </div>
+        </div>
 
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label className="data-label" style={{ display: 'block', marginBottom: '0.5rem' }}>Select Claim Type:</label>
-            <select 
-              value={domainMode} 
-              onChange={(e) => setDomainMode(e.target.value)}
-              className="domain-select"
-            >
-              <option value="expense">Corporate Expense</option>
-              <option value="health_insurance">Health Insurance (Medical Bill)</option>
-            </select>
-          </div>
-          
-          <div 
-            className="upload-area"
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleFileChange} 
-              accept="image/*,application/pdf"
-            />
-            
-            {previewUrl ? (
-              <img src={previewUrl} alt="Receipt Preview" className="preview-image" />
-            ) : (
-              <>
-                <div className="upload-icon">🧾</div>
-                <p>Drag and drop a receipt/bill here</p>
-                <p className="data-label" style={{marginTop: '0.5rem', fontSize: '0.8rem'}}>or click to browse</p>
-              </>
-            )}
-          </div>
-          
-          <button 
-            className="btn" 
-            onClick={handleAnalyze} 
-            disabled={!file || loading}
-          >
-            {loading ? <span className="loader"></span> : 'Process Claim'}
-          </button>
-          
-          {error && <div style={{color: 'var(--error)', marginTop: '1rem', textAlign: 'center'}}>{error}</div>}
-
-          <div style={{ marginTop: '2rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2>Recent Claims</h2>
-              <button className="btn" style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', marginTop: 0 }} onClick={handleExportCsv}>
-                Export Full CSV Audit
-              </button>
+        {error && (
+          <div className="notice notice-error">
+            <div>
+              <strong>Connection Error</strong>
+              <p style={{ margin: '4px 0 0' }}>{error}</p>
             </div>
-            <div className="table-container">
-              <table className="items-table">
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Type</th>
-                    <th>Status</th>
-                    <th>Amount (INR)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {claimsHistory.map(claim => (
-                    <tr key={claim.id}>
-                      <td>#{claim.id}</td>
-                      <td>{claim.domain}</td>
-                      <td>
-                        <span className={`status-badge ${claim.is_valid ? 'valid' : 'invalid'}`} style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem', width: 'auto' }}>
-                          {claim.status || (claim.is_valid ? 'Valid' : 'Flagged')}
-                        </span>
-                      </td>
-                      <td>₹{claim.total_inr}</td>
-                    </tr>
-                  ))}
-                  {claimsHistory.length === 0 && (
-                    <tr>
-                      <td colSpan="4" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No claims processed yet.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <button onClick={() => setError(null)}>×</button>
           </div>
-        </section>
+        )}
         
-        {/* Right Panel: Output & Dashboard */}
-        <section className="panel" style={{ overflowY: 'auto' }}>
-          <h2>Results Dashboard</h2>
+        <div className="work-grid">
+          {/* Left Panel: Input & History */}
+          <div>
+            <section className="card intake-card">
+              <div className="card-heading">
+                <div>
+                  <div className="eyebrow">STEP 1</div>
+                  <h2>Intake Form</h2>
+                </div>
+                <div className="step-tag">INPUT</div>
+              </div>
+
+              <div>
+                <label className="field-label">Select Claim Type</label>
+                <select 
+                  value={domainMode} 
+                  onChange={(e) => setDomainMode(e.target.value)}
+                  className="domain-select"
+                >
+                  <option value="expense">Corporate Expense</option>
+                  <option value="health_insurance">Health Insurance (Medical Bill)</option>
+                </select>
+              </div>
+              
+              <div 
+                className="dropzone"
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleFileChange} 
+                  accept="image/*,application/pdf"
+                />
+                
+                {previewUrl ? (
+                  <img src={previewUrl} alt="Receipt Preview" className="preview-image" />
+                ) : (
+                  <>
+                    <div className="upload-icon upload-symbol">↑</div>
+                    <strong>Drag and drop file here</strong>
+                    <span>JPG, PNG up to 5MB</span>
+                  </>
+                )}
+              </div>
+              
+              <button 
+                className="primary-button" 
+                onClick={handleAnalyze} 
+                disabled={!file || loading}
+              >
+                {loading ? <div className="spinner"></div> : 'Process Claim'}
+              </button>
+            </section>
+
+            {/* History Section */}
+            <section className="card history-card">
+              <div className="card-heading history-heading">
+                <h2>Recent Claims</h2>
+                <button className="secondary-button" onClick={handleExportCsv}>
+                  Export CSV
+                </button>
+              </div>
+              
+              {claimsHistory.length > 0 ? (
+                <div className="table-wrap">
+                  <table className="history-table">
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Amount</th>
+                        <th className="right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {claimsHistory.map(claim => (
+                        <tr key={claim.id}>
+                          <td className="claim-id">#{claim.id}</td>
+                          <td>{claim.domain === 'health_insurance' ? 'Health' : 'Expense'}</td>
+                          <td>
+                            <span className={`status-pill ${claim.status === 'Approved' ? 'pill-valid' : (claim.status === 'Rejected' ? 'pill-review' : 'pill-pending')}`}>
+                              {claim.status || (claim.is_valid ? 'Valid' : 'Flagged')}
+                            </span>
+                          </td>
+                          <td>₹{claim.total_inr}</td>
+                          <td className="right">
+                            {(!claim.status || claim.status === 'Pending') && (
+                              <div className="action-buttons" style={{ justifyContent: 'flex-end' }}>
+                                <button onClick={() => handleDecision(claim.id, 'Approved')}>Approve</button>
+                                <button className="reject-button" onClick={() => handleDecision(claim.id, 'Rejected')}>Reject</button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="history-empty">
+                  No claims processed yet.
+                </div>
+              )}
+            </section>
+          </div>
           
-          <div className="results">
+          {/* Right Panel: Output & Dashboard */}
+          <section className="card results-card">
+            <div className="card-heading">
+              <div>
+                <div className="eyebrow">STEP 2</div>
+                <h2>Validation Results</h2>
+              </div>
+              {result && result.metadata && result.metadata.is_fallback_mock && (
+                <div className="mock-tag">MOCK DATA</div>
+              )}
+            </div>
+            
             {!result && !loading && (
-              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)'}}>
-                Upload a claim to see AI extraction and validation results.
+              <div className="empty-state">
+                <div className="empty-icon">▨</div>
+                <strong>No Active Claim</strong>
+                <p>Upload a document on the left to see Gemma 4 extraction and engine verification.</p>
               </div>
             )}
             
             {loading && (
-              <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--accent)'}}>
-                <div className="loader" style={{width: '40px', height: '40px', borderWidth: '4px', marginBottom: '1rem'}}></div>
-                <p>Gemma 4 is processing...</p>
+              <div className="empty-state">
+                <div className="spinner spinner-large"></div>
+                <strong>Processing...</strong>
+                <p>Running multimodal extraction and deterministic checks.</p>
               </div>
             )}
 
             {result && result.validation && (
               <>
-                {/* Glowing Badge for Overall Status */}
-                <div className={`status-badge ${result.validation.is_valid ? 'valid' : 'invalid'}`}>
-                  {result.validation.is_valid ? 'SYSTEM APPROVED' : 'FLAGGED / MANUAL REVIEW'}
-                </div>
-
-                {/* Extracted Data summary */}
-                <div className="section-card">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                    <h3 style={{ margin: 0 }}>🧠 Gemma 4 Extracted Data</h3>
-                    <span className="data-label" style={{ fontSize: '0.8rem' }}>Model: {result.metadata.model_used}</span>
+                <div className={`decision-banner ${result.validation.is_valid ? 'decision-pass' : 'decision-review'}`}>
+                  <div className="decision-icon">
+                    {result.validation.is_valid ? '✓' : '!'}
                   </div>
-                  
-                  <div className="data-row">
-                    <span className="data-label">Provider/Vendor</span>
-                    <span className="data-value">{result.perception.structured_data.provider_name || result.perception.structured_data.vendor_name}</span>
-                  </div>
-                  <div className="data-row">
-                    <span className="data-label">Patient/Employee</span>
-                    <span className="data-value">{result.perception.structured_data.patient_or_employee_name || 'N/A'}</span>
-                  </div>
-                  <div className="data-row">
-                    <span className="data-label">Total Amount</span>
-                    <span className="data-value">{result.perception.structured_data.total_extracted} {result.perception.structured_data.currency}</span>
-                  </div>
-                  <div className="data-row">
-                    <span className="data-label">Final Amount (INR)</span>
-                    <span className="data-value" style={{ color: 'var(--accent)' }}>₹{result.validation.final_amount_inr}</span>
-                  </div>
-                </div>
-
-                {/* Line Items Table */}
-                <div className="section-card">
-                  <h3 style={{ marginBottom: '1rem' }}>🛒 Line Items</h3>
-                  <div className="table-container">
-                    <table className="items-table">
-                      <thead>
-                        <tr>
-                          <th>Description</th>
-                          <th>Category</th>
-                          <th style={{ textAlign: 'right' }}>Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {result.perception.structured_data.items.map((item, idx) => (
-                          <tr key={idx}>
-                            <td>{item.description}</td>
-                            <td><span style={{ padding: '2px 6px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', fontSize: '0.8rem' }}>{item.category || 'misc'}</span></td>
-                            <td style={{ textAlign: 'right' }}>{item.amount.toFixed(2)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Deterministic Verification Results */}
-                <div className="section-card">
-                  <h3 style={{ marginBottom: '1rem' }}>⚙️ Engine Verification</h3>
                   <div>
-                    {result.validation.results.map((rule, idx) => (
-                      <div key={idx} className={`rule-item ${rule.passed ? 'pass' : 'fail'}`}>
-                        <div className="rule-icon">{rule.passed ? '✅' : '❌'}</div>
-                        <div className="rule-content">
-                          <h4>{rule.rule_name}</h4>
-                          <p>{rule.message}</p>
-                        </div>
-                      </div>
-                    ))}
+                    <strong>{result.validation.is_valid ? 'SYSTEM APPROVED' : 'FLAGGED / MANUAL REVIEW'}</strong>
+                    <small>Claim #{result.claim_id || 'N/A'}</small>
+                  </div>
+                  {result.perception && result.perception.confidence && (
+                    <div className="confidence">
+                      CONFIDENCE: {(result.perception.confidence * 100).toFixed(0)}%
+                    </div>
+                  )}
+                </div>
+
+                <div className="summary-grid">
+                  <div className="summary-tile">
+                    <span>PROVIDER / VENDOR</span>
+                    <strong>{result.perception.structured_data.provider_name || result.perception.structured_data.vendor_name || 'Unknown'}</strong>
+                  </div>
+                  <div className="summary-tile">
+                    <span>PATIENT / EMPLOYEE</span>
+                    <strong>{result.perception.structured_data.patient_or_employee_name || 'N/A'}</strong>
+                  </div>
+                  <div className="summary-tile">
+                    <span>ORIGINAL AMOUNT</span>
+                    <strong>{result.perception.structured_data.total_extracted} {result.perception.structured_data.currency}</strong>
+                  </div>
+                  <div className="summary-tile">
+                    <span>FINAL AMOUNT (INR)</span>
+                    <strong className="amount">₹{result.validation.final_amount_inr}</strong>
                   </div>
                 </div>
 
-                {/* Manager Decision */}
-                <div className="section-card" style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-                  <button className="btn" style={{ flex: 1, background: 'var(--success)' }} onClick={() => handleDecision('Approved')}>
-                    Approve Claim
-                  </button>
-                  <button className="btn" style={{ flex: 1, background: 'var(--error)' }} onClick={() => handleDecision('Rejected')}>
-                    Reject Claim
-                  </button>
+                <div className="rules-heading subheading">
+                  <h3>ENGINE VERIFICATION <span className="count-tag">{result.validation.results.length} RULES</span></h3>
+                </div>
+                
+                <div className="rules-list">
+                  {result.validation.results.map((rule, idx) => (
+                    <div key={idx} className="rule-row">
+                      <div className={`rule-dot ${rule.passed ? 'rule-ok' : 'rule-fail'}`}>
+                        {rule.passed ? '✓' : '×'}
+                      </div>
+                      <div>
+                        <strong>{rule.rule_name}</strong>
+                        <p>{rule.message}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="rules-heading subheading" style={{ marginTop: '24px' }}>
+                  <h3>LINE ITEMS</h3>
+                </div>
+                
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Description</th>
+                        <th>Category</th>
+                        <th className="right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {result.perception.structured_data.items.map((item, idx) => (
+                        <tr key={idx}>
+                          <td>{item.description}</td>
+                          <td><span className="category-tag">{item.category || 'misc'}</span></td>
+                          <td className="right">{item.amount.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </>
             )}
-          </div>
-        </section>
+          </section>
+        </div>
       </main>
     </>
   );
