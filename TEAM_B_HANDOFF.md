@@ -38,12 +38,13 @@ ClaimGuard has expanded from a simple receipt checker into a full **Personal Cla
 
 Use branch `feat/frontend`. Do not edit backend files. The API is implemented by Person A on `feat/core-ai`; sync that branch through the agreed master integration before connecting it.
 
-1. Add a policy PDF upload action calling `POST /api/policies` with multipart field `file`. Show upload/indexing progress and errors for invalid, encrypted, oversized, or scanned PDFs.
-2. After upload, call `GET /api/policies/{policy_id}` and render insurer, filename, page count, and `profile` facts. Each fact has `topic`, `pages`, `evidence`, and `status`; show citations as printed page numbers and flag `conflict_review` for human review.
+1. Add a separate policy PDF upload action calling `POST /api/policies` with multipart field `file`. Keep the existing claim-image control restricted to JPG/PNG; policy PDFs must not be sent to `POST /api/validate`. Show indexing progress and errors for invalid, encrypted, oversized, or scanned PDFs.
+2. After upload, call `GET /api/policies/{policy_id}` and render insurer, filename, page count, and `profile` facts. Each fact has `topic`, `pages`, `evidence`, and `status`; show citations as 1-based PDF page numbers and flag `conflict_review` for human review.
 3. Add a policy question panel calling `POST /api/policies/{policy_id}/chat` with `{"question":"..."}`. Render `answer`, `model_used`, and every `citations[].page` plus excerpt. No source result means no confident policy answer.
 4. Read `GET /api/model/status`; distinguish cloud Gemma, reachable local Ollama, and offline retrieval-only mode. Do not describe retrieval-only output as a model response.
 5. Keep claim reminders as importable `.ics` links. Label dates provisional and ask the user to confirm a policy deadline; the generic reminder is not a universal legal deadline.
 6. Use only fictional profile details from `CLAIMGUARD_SAMPLE_POLICY_UI_PROFILE.md`. Never add the original PDF or its identifiers to screenshots, fixtures, or Git.
+7. Replace the current hard-coded “Gemma 2.5 Flash” hero label with runtime status. Show Gemma 4 only when the model status and configured model support that claim.
 
 #### Acceptance Checks
 

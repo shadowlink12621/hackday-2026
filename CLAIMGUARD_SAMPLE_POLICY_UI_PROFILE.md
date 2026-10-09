@@ -8,7 +8,7 @@ This is a redacted UI fixture based on the locally supplied 59-page SBI General 
 - Product label: Group Mediclaim Policy; schedule names Arogya Advanced
 - Policy period: show only after parsing and user confirmation; do not copy the personal schedule dates into this public fixture.
 - Base cover: schedule includes a ₹5,00,000 family-floater entry. Confirm which schedule row applies before presenting it as the user's active benefit.
-- Source document: 59 pages; source page numbering matches the printed page labels for the citations below.
+- Source document: 59 pages; citations use 1-based PDF viewer page numbers. They match the printed labels in this sample.
 - Review status: “Illustrative extraction; verify with the active schedule and complete policy wording.”
 
 ## Eye Treatment Findings
@@ -16,29 +16,29 @@ This is a redacted UI fixture based on the locally supplied 59-page SBI General 
 ### Cataract
 
 - Finding: the Customer Information Sheet lists a 12-month specific waiting period for cataract, with an accident exception noted in the wording.
-- Citation: printed page 9.
+- Citation: PDF page 9.
 - UI state: “Waiting period found” with a link to page 9.
 - Do not display a fixed cataract payout. The reviewed schedule/CIS text does not establish a single cataract-specific payout amount.
 
 ### Refractive Error
 
-- Finding: refractive error is listed as an exclusion on printed page 4. Detailed wording on printed page 35 describes exclusion for eyesight correction due to refractive error below 7.5 dioptres.
-- Citations: printed pages 4 and 35.
+- Finding: refractive error is listed as an exclusion on PDF page 4. Detailed wording on PDF page 35 describes exclusion for eyesight correction due to refractive error below 7.5 dioptres.
+- Citations: PDF pages 4 and 35.
 - UI state: “Exclusion wording found; check exact treatment and policy version.”
 - Do not generalize this to every eye procedure or to all insurer products.
 
 ### OPD and Optical Items
 
-- Finding: one schedule entry lists OPD cover of ₹3,000 per family on printed page 3.
-- Finding: wording on printed page 25 says lenses, including contact lenses, are excluded in the relevant benefit context.
-- Citations: printed pages 3 and 25.
+- Finding: one schedule entry lists OPD cover of ₹3,000 per family on PDF page 3.
+- Finding: wording on PDF page 25 says lenses, including contact lenses, are excluded in the relevant benefit context.
+- Citations: PDF pages 3 and 25.
 - UI state: “Limit found; optical expense eligibility needs clause-level review.”
 - Do not imply the ₹3,000 OPD amount pays for every eye test, frame, or lens.
 
 ### Room Rent
 
-- Finding: printed page 3 contains both a room-rent limit entry and a “no room rent capping” entry in different schedule blocks.
-- Citation: printed page 3.
+- Finding: PDF page 3 contains both a room-rent limit entry and a “no room rent capping” entry in different schedule blocks.
+- Citation: PDF page 3.
 - UI state: “Conflicting schedule text; verify the applicable plan/schedule before calculation.”
 - Do not choose a cap or advertise an automatic proportional deduction from this extracted text alone.
 
@@ -62,7 +62,7 @@ All patient names, dates, bills, chat prompts, and reminder dates shown in scree
 
 ## Chat Test Cases
 
-1. Question: “What does the wording say about cataract?” Expected: mention the 12-month specific waiting period and cite page 9; state that this alone does not establish coverage or payout.
+1. Question: “What does the wording say about cataract?” Expected: mention the 12-month specific waiting period and cite PDF page 9; state that this alone does not establish coverage or payout.
 2. Question: “Is eyesight correction covered?” Expected: summarize the refractive-error exclusion and cite pages 4 and 35; do not apply it to unrelated ophthalmic procedures.
 3. Question: “What is the room-rent cap?” Expected: say that the schedule text is contradictory and cite page 3; request visual/user confirmation instead of selecting a number.
 4. Question: “Will this hospital pay my entire eye bill?” Expected: say the indexed wording does not establish a guaranteed payout; ask for procedure, active schedule and claim facts.

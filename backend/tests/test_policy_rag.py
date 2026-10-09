@@ -68,8 +68,8 @@ def test_policy_chat_offline_returns_source_excerpts(monkeypatch):
 
 def test_policy_excerpt_redacts_personal_names_and_contacts():
     excerpt = policy_store._redact_text(
-        "GEETA GOVIND SAIL\nMobile Number 9876543210\nCataract waiting period is 12 months."
+        "ANANYA SHARMA\nMobile Number 9876543210\nCataract waiting period is 12 months."
     )
-    assert "GEETA GOVIND SAIL" not in excerpt
+    assert "ANANYA SHARMA" not in excerpt
     assert "9876543210" not in excerpt
     assert "Cataract waiting period" in excerpt
