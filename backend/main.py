@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from io import StringIO
 import json
 import os
+from pathlib import Path
 import sqlite3
 import time
 from typing import Any, Optional
@@ -11,6 +12,35 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
+
+
+def _load_local_environment() -> None:
+    """Load ignored local settings without overriding variables set by the host."""
+    repo_root = Path(__file__).resolve().parent.parent
+    env_path = next(
+        (path for path in (repo_root / ".env", repo_root / "hackday.env") if path.is_file()),
+        None,
+    )
+    if env_path is None:
+        return
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[7:].lstrip()
+        key, separator, value = line.partition("=")
+        key = key.strip()
+        if not separator or not key or key in os.environ:
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        os.environ[key] = value
+
+
+_load_local_environment()
+
 from .engine import (
     analyze_insurance_message,
     generate_claim_calendar_ics,
@@ -109,9 +139,12 @@ async def process_request(
                 detail="Invalid rule_settings: must be a valid JSON object string.",
             )
 
-    extracted_data, is_mock, model_source = await run_in_threadpool(
-        extract_form_data, contents, mime_type, prompt or "", domain_mode
-    )
+    try:
+        extracted_data, is_mock, model_source = await run_in_threadpool(
+            extract_form_data, contents, mime_type, prompt or "", domain_mode
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     validation_result = run_deterministic_checks(extracted_data, contents, rule_settings, domain_mode)
 
     claim_id = save_claim(domain_mode, extracted_data, validation_result)

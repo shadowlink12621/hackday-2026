@@ -134,10 +134,18 @@ def extract_form_data(
             import pypdf
             reader = pypdf.PdfReader(io.BytesIO(file_bytes))
             pdf_text = "\n".join(page.extract_text() or "" for page in reader.pages)
+            if not pdf_text.strip():
+                raise ValueError(
+                    "This PDF has no searchable text. Upload a searchable PDF or an image of the bill; scanned-PDF OCR is not enabled yet."
+                )
             user_prompt = f"{user_prompt}\n\n[Extracted Document Text]:\n{pdf_text}"
             file_bytes = b""  # Clear binary to prevent sending PDF bytes to image APIs
+        except ValueError:
+            raise
         except Exception as e:
-            print(f"PDF extraction failed: {e}")
+            raise ValueError(
+                "ClaimGuard could not read this PDF. Try a searchable PDF or upload its pages as JPEG/PNG images."
+            ) from e
 
     has_content = bool(file_bytes or pdf_text)
 
@@ -147,7 +155,7 @@ def extract_form_data(
         if ollama_extracted:
             return ollama_extracted, False, f"local_ollama ({os.environ.get('OLLAMA_MODEL', 'gemma2')})"
 
-            # Tier 2: Cloud Google GenAI (Gemma 4)
+    # Tier 2: Cloud Google GenAI (Gemma 4 multimodal extraction)
     if not force_mock and HAS_GENAI and api_key and has_content and not use_local_llm:
         try:
             client = genai.Client(api_key=api_key)
@@ -186,7 +194,7 @@ def extract_form_data(
             parsed = ClaimExtraction.model_validate_json(response.text)
             return parsed, False, f"cloud_gemma ({model_name})"
         except Exception as e:
-            print(f"GenAI extraction failed: {e}. Trying local or fallback mock.")
+            print(f"GenAI extraction failed ({type(e).__name__}): {e}. Trying local or fallback mock.")
 
     # Tier 1.5: If Cloud GenAI failed and we didn't try Ollama yet, try Ollama now
     if not force_mock and not use_local_llm and has_content:
