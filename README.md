@@ -12,15 +12,15 @@
 ClaimGuard is an open-source multimodal claim verification agent designed to audit corporate expense receipts and health insurance bills.
 
 Instead of relying on fragile legacy OCR or trusting black-box LLM arithmetic, ClaimGuard uses a two-stage hybrid architecture:
-1. **Document Perception (Google GenAI):** Uses the configured Gemini API model for consented image/PDF extraction; searchable PDFs can also be parsed locally. Model calls are server-side.
+1. **Document Perception (Gemma 4):** Uses the configured Gemma API model for consented image/PDF extraction; searchable PDF text is read page by page. Model calls are server-side.
 2. **Deterministic Code Verification (Python Engine):** Validates arithmetic sums, cross-references an immutable SQLite ledger for exact duplicate image submissions (SHA-256), applies currency conversions, and enforces configurable policy limits (e.g. corporate expense caps or hospital room-rent limits).
 
 ---
 
 ## Key Features
 
-- **Model-backed extraction:** Google GenAI integration with prompt-injection defenses; cloud processing requires explicit user consent.
-- **Honest Offline Mode:** Without a configured model, policy Q&A returns extractive source passages and claim uploads return zero-confidence “not extracted” evidence rather than fabricated sample claims.
+- **Multimodal Perception:** Prompt-engineered Gemma 4 extraction with prompt-injection defenses (untrusted document sandboxing).
+- **Honest Offline Handling:** When no model is reachable, reports that extraction is unavailable instead of creating a fictional claim.
 - **Deterministic Math & Policy Engine:** Strict arithmetic validation separating AI perception from mathematical proof.
 - **Cryptographic Duplicate Ledger:** Instant duplicate submission detection using SHA-256 image hashes stored in SQLite with WAL mode and concurrency retry handling.
 - **Configurable Policies:** Dynamic rule settings for expense caps, health insurance room-rent caps, and exclusions for non-medical consumables.
@@ -75,8 +75,8 @@ source .venv/bin/activate
 # Install dependencies
 pip install -r backend/requirements.txt
 
-# Copy .env.example to .env and set GEMINI_API_KEY locally.
-# GEMINI_MODEL defaults to gemma-4-26b-a4b-it. Never commit .env.
+# Copy .env.example to .env and set GEMINI_API_KEY locally. GEMMA_MODEL defaults to Gemma 4.
+# Never paste keys into source files, commits, or chat.
 
 # Start FastAPI server
 python -m uvicorn backend.main:app --reload --port 8000

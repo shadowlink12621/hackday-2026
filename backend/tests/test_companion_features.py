@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from backend import engine
 from backend.main import app
-from backend.scripts.seed_demo_claims import seed_demo_claims
+from backend.gemma_client import ClaimExtraction
 
 client = TestClient(app)
 
@@ -26,7 +26,13 @@ def test_model_status_endpoint():
 
 
 def test_calendar_ics_download():
-    seed_demo_claims()
+    extracted = ClaimExtraction(
+        provider_name="Calendar test provider",
+        currency="INR",
+        total_extracted=100.0,
+    )
+    validation = engine.run_deterministic_checks(extracted, b"calendar fixture", "{}", "expense")
+    engine.save_claim("expense", extracted, validation)
     claims_resp = client.get("/api/claims")
     claims = claims_resp.json()
     assert len(claims) > 0

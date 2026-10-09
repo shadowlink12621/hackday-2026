@@ -146,13 +146,21 @@ def test_pdf_rejects_invalid_signature():
     assert response.status_code == 400
 
 
-def test_scanned_pdf_requires_explicit_cloud_ocr_consent(monkeypatch):
+def test_claim_pdf_without_extraction_does_not_create_sample_data(monkeypatch):
     from backend import gemma_client
+    from backend import pdf_processing
 
-    monkeypatch.setattr(gemma_client, "_extract_text_from_pdf", lambda _: "")
+    monkeypatch.setattr(pdf_processing, "extract_pdf_pages", lambda _: [
+        {"page": 1, "text": "", "images": [{"bytes": b"image", "mime_type": "image/png"}]},
+    ])
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    with pytest.raises(ValueError, match="appears scanned"):
-        gemma_client.extract_form_data(b"%PDF-1.4 scan", "application/pdf", "", "health_insurance")
+    extracted, fallback, source = gemma_client.extract_form_data(
+        b"%PDF-1.4 scan", "application/pdf", "", "health_insurance"
+    )
+    assert fallback is True
+    assert source == "offline_mock"
+    assert extracted.confidence_score == 0
+    assert extracted.items == []
 
 
 def test_api_token_protects_personal_data_routes(monkeypatch):

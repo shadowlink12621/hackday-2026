@@ -13,21 +13,8 @@ export default function ResultsDashboard({ result, loading }) {
           <div className="eyebrow">STEP 2</div>
           <h2>Validation Results</h2>
         </div>
-        {result && isOffline && (
-          <div className="mock-tag">OFFLINE · NOT EXTRACTED</div>
-        )}
-        {result && !isOffline && modelUsed && (
-          <div style={{
-            fontSize: '11px',
-            fontFamily: 'monospace',
-            color: '#10b981',
-            background: 'rgba(16,185,129,0.1)',
-            border: '1px solid rgba(16,185,129,0.3)',
-            padding: '3px 8px',
-            borderRadius: '4px',
-          }}>
-            {modelUsed}
-          </div>
+        {result && result.metadata && result.metadata.is_fallback_mock && (
+          <div className="mock-tag">{result.metadata.document_type === 'policy_document' ? 'KEYWORD SCAN' : 'OFFLINE · NOT EXTRACTED'}</div>
         )}
       </div>
       

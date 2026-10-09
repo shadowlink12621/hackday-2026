@@ -158,16 +158,29 @@ export default function PolicyNavigator() {
     setNotice('');
     try {
       if (uploadCategory === 'policy') {
-        setCloudConsent(false);
         setGeneratedSummary(null);
         setMessages([]);
       }
-      const response = await uploadCaseDocument(caseData.case_id, file, uploadCategory);
+      const response = await uploadCaseDocument(
+        caseData.case_id,
+        file,
+        uploadCategory,
+        uploadCategory === 'policy' && cloudConsent,
+      );
       await refreshCase(caseData.case_id);
       if (uploadCategory === 'policy') {
         setPolicyData(response.policy);
         setStep('review');
-        setNotice(`Indexed ${response.policy?.page_count ?? 0} policy pages locally. Original file is saved only in this local demo.`);
+        setCloudConsent(false);
+        const indexing = response.indexing;
+        const ocrPages = indexing?.ocr_pages?.length || 0;
+        const skippedPages = indexing?.image_ocr_consent_needed || [];
+        setNotice(
+          `Indexed ${indexing?.indexed_pages ?? 0} of ${response.policy?.page_count ?? 0} policy pages. ` +
+          `${ocrPages ? `Gemma read embedded images on ${ocrPages} page(s). ` : ''}` +
+          `${skippedPages.length ? `Images on pages ${skippedPages.join(', ')} were skipped; re-upload with cloud consent to read them. ` : ''}` +
+          'The original file is saved only in this local demo.',
+        );
       } else {
         setNotice('Document saved to this case locally. Medical interpretation is not available yet.');
       }
@@ -357,7 +370,10 @@ export default function PolicyNavigator() {
         <section className="card workflow-panel">
           <div className="eyebrow">STEP 2 · POLICY SOURCE</div>
           <h2>Upload the policy schedule and wording</h2>
-          <p>Text-based PDF, up to 20 MB. It is indexed page by page and linked to this case. Scanned PDFs need OCR and will be rejected if no text can be read.</p>
+          <p>PDFs up to 20 MB are indexed page by page. Searchable text is extracted locally; embedded and scanned page images can be read by Gemma when you consent below.</p>
+          <label className="consent-line"><input type="checkbox" checked={cloudConsent} onChange={(event) => setCloudConsent(event.target.checked)} />
+            I consent to send this policy PDF’s embedded page images to Gemma for text extraction. Searchable text is indexed locally; generated answers still require consent on the review step.
+          </label>
           <label className="file-action">{policyDocument ? 'Replace policy PDF' : 'Choose policy PDF'}
             <input type="file" accept="application/pdf,.pdf" onChange={(event) => handleUpload(event, 'policy')} disabled={busy} />
           </label>

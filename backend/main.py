@@ -4,6 +4,7 @@ import hmac
 from io import StringIO
 import json
 import os
+from pathlib import Path
 import sqlite3
 import time
 from typing import Any, Optional
@@ -12,6 +13,34 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
+
+
+def _load_local_environment() -> None:
+    """Load ignored local settings without overriding variables set by the host."""
+    repo_root = Path(__file__).resolve().parent.parent
+    env_path = next(
+        (path for path in (repo_root / ".env", repo_root / "hackday.env") if path.is_file()),
+        None,
+    )
+    if env_path is None:
+        return
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[7:].lstrip()
+        key, separator, value = line.partition("=")
+        key = key.strip()
+        if not separator or not key or key in os.environ:
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '\"'):
+            value = value[1:-1]
+        os.environ[key] = value
+
+
+_load_local_environment()
 from .engine import (
     RuleResult,
     analyze_insurance_message,
@@ -22,10 +51,17 @@ from .engine import (
     save_claim,
     update_claim_decision,
 )
-from .gemma_client import extract_form_data, get_model_status, chat_with_claim
+from .gemma_client import CloudModelError, extract_form_data, get_model_status, chat_with_claim, verify_cloud_connection
 from .knowledge_loader import get_insurer_knowledge, list_known_insurers
-from .policy_store import MAX_POLICY_PDF_BYTES, get_policy, get_policy_pages, ingest_policy_pdf, retrieve_policy_pages
-from .gemma_client import answer_with_policy, summarize_policy_pages, verify_cloud_connection
+from .policy_store import (
+    MAX_POLICY_PDF_BYTES,
+    get_policy,
+    get_policy_pages,
+    ingest_policy_pdf,
+    retrieve_policy_pages,
+)
+from .policy.chat import answer as answer_with_policy
+from .gemma_client import summarize_policy_pages
 from .case_store import (
     ALLOWED_DOCUMENT_TYPES,
     DOCUMENT_CATEGORIES,
@@ -158,10 +194,12 @@ async def process_request(
     try:
         extracted_data, is_mock, model_source = await run_in_threadpool(
             extract_form_data, contents, mime_type, prompt or "", domain_mode,
-            allow_cloud_processing=allow_cloud_processing,
+            allow_cloud_processing,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except CloudModelError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     validation_result = run_deterministic_checks(extracted_data, contents, rule_settings, domain_mode)
     if model_source == "local_pdf_document_extractor":
         validation_result.results.append(RuleResult(
@@ -259,7 +297,8 @@ async def upload_policy(file: UploadFile = File(...)):
     if len(contents) > MAX_POLICY_PDF_BYTES:
         raise HTTPException(status_code=413, detail="Policy PDF must be 20 MB or smaller.")
     try:
-        return ingest_policy_pdf(contents, file.filename)
+        # Legacy endpoint remains local-only; image OCR requires explicit consent.
+        return ingest_policy_pdf(contents, file.filename, allow_cloud_processing=False)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -368,6 +407,7 @@ async def upload_case_document(
     case_id: int,
     file: UploadFile = File(...),
     category: str = Form("other"),
+    allow_cloud_processing: bool = Form(False),
 ):
     """Store a case file locally and index policy PDFs for citation-backed questions."""
     if not file.filename:
@@ -384,12 +424,13 @@ async def upload_case_document(
         raise HTTPException(status_code=413, detail="Documents must be 20 MB or smaller.")
 
     policy_id = None
+    policy_index = None
     if category == "policy":
         if content_type != "application/pdf":
             raise HTTPException(status_code=400, detail="Policy documents must be PDF files.")
         try:
-            indexed = ingest_policy_pdf(contents, file.filename)
-            policy_id = indexed["policy_id"]
+            policy_index = ingest_policy_pdf(contents, file.filename, allow_cloud_processing)
+            policy_id = policy_index["policy_id"]
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
     try:
@@ -398,7 +439,12 @@ async def upload_case_document(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not saved:
         raise HTTPException(status_code=404, detail=f"Case {case_id} not found.")
-    return {**saved, "policy": get_policy(policy_id) if policy_id else None, "storage": "local"}
+    return {
+        **saved,
+        "policy": get_policy(policy_id) if policy_id else None,
+        "indexing": policy_index,
+        "storage": "local",
+    }
 
 
 @app.get("/api/cases/{case_id}/documents/{document_id}/download")

@@ -7,7 +7,19 @@ import UploadZone from './components/UploadZone';
 import ResultsDashboard from './components/ResultsDashboard';
 import HistoryTable from './components/HistoryTable';
 import ErrorBoundary from './components/ErrorBoundary';
+import FeatureShaderCards from './components/ui/feature-shader-cards';
+import BenefitCalendar from './components/BenefitCalendar';
+import ScamCheck from './components/ScamCheck';
+import InsurerKnowledge from './components/InsurerKnowledge';
 import PolicyNavigator from './components/PolicyNavigator';
+
+const appTabs = [
+  { id: 'navigator', label: 'Policy Navigator' },
+  { id: 'claims', label: 'Claims Workspace' },
+  { id: 'calendar', label: 'Benefit Calendar' },
+  { id: 'scamcheck', label: 'ScamCheck' },
+  { id: 'insurers', label: 'Insurer Knowledge' },
+];
 
 function App() {
   const [activeTab, setActiveTab] = useState('claims');
@@ -132,8 +144,10 @@ function App() {
         setFile(null);
         setPreviewUrl(null);
       }
-    } catch {
-      alert('Failed to submit decision');
+    } catch (err) {
+      setError(err.message || 'Failed to submit decision.');
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
@@ -153,18 +167,6 @@ function App() {
       alert('Failed to download CSV');
     }
   };
-
-  const tabStyle = (tab, color) => ({
-    padding: '8px 18px',
-    borderRadius: '8px',
-    border: activeTab === tab ? `1px solid ${color}` : '1px solid rgba(255,255,255,0.1)',
-    background: activeTab === tab ? `${color}22` : 'rgba(255,255,255,0.03)',
-    color: activeTab === tab ? color : '#94a3b8',
-    fontWeight: 600,
-    fontSize: '13px',
-    cursor: 'pointer',
-    transition: 'all 0.2s',
-  });
 
   if (!authResolved) return <main className="access-gate"><p>Connecting to ClaimGuard…</p></main>;
   if (authRequired && !authorized) return (
@@ -194,30 +196,13 @@ function App() {
             </p>
           </div>
           <div className="hero-stat">
-            <span>STORAGE</span>
-            <strong>Stored locally</strong>
-            <small>PDF + Image supported</small>
+            <span>MODEL</span>
+            <strong>{modelStatus?.active_backend === 'cloud_gemma' ? 'Cloud Gemma 4' : modelStatus?.active_backend === 'local_ollama' ? 'Local Ollama Gemma' : modelStatus?.active_backend === 'offline_mock' ? 'Offline fallback' : 'Checking model…'}</strong>
+            <small>{modelStatus?.active_backend === 'offline_mock' ? 'Offline mode ready' : modelStatus ? 'Runtime model status' : 'Waiting for backend'}</small>
           </div>
         </div>
 
         {/* Navigation Tabs */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '14px' }}>
-          <button
-            id="tab-expense-auditor"
-            onClick={() => setActiveTab('claims')}
-            style={tabStyle('claims', '#38bdf8')}
-          >
-            📄 Expense &amp; Bill Auditor
-          </button>
-          <button
-            id="tab-patient-policy"
-            onClick={() => setActiveTab('policy')}
-            style={tabStyle('policy', '#10b981')}
-          >
-            🏥 Patient Cases &amp; Policy
-          </button>
-        </div>
-
         {error && (
           <div className="notice notice-error">
             <div>
@@ -228,35 +213,84 @@ function App() {
           </div>
         )}
 
-        {/* Tab 1: Expense & Bill Auditor */}
+      {file?.type === 'application/pdf' && !result && (
+        <div className="notice notice-info pdf-notice" role="status">
+          <div>
+            <strong>PDF detected</strong>
+            <p style={{ margin: '4px 0 0' }}>ClaimGuard reads searchable text across every page. If you enable cloud processing below, Gemma also reads page images and scanned pages.</p>
+          </div>
+        </div>
+      )}
+
+        <nav className="app-tabs" role="tablist" aria-label="ClaimGuard workspaces">
+          {appTabs.map((tab) => (
+            <button
+              type="button"
+              role="tab"
+              id={`tab-${tab.id}`}
+              aria-selected={activeTab === tab.id}
+              aria-controls={`panel-${tab.id}`}
+              className={activeTab === tab.id ? 'app-tab active' : 'app-tab'}
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+
         {activeTab === 'claims' && (
-          <div className="work-grid">
-            <div>
-              <UploadZone
-                domainMode={domainMode}
-                setDomainMode={setDomainMode}
-                file={file}
-                previewUrl={previewUrl}
-                loading={loading}
-                handleFileChange={handleFileChange}
-                handleAnalyze={handleAnalyze}
-                allowCloudProcessing={allowCloudProcessing}
-                setAllowCloudProcessing={setAllowCloudProcessing}
-              />
+          <div id="panel-claims" className="app-tab-panel" role="tabpanel" aria-labelledby="tab-claims" tabIndex={0}>
 
-              <HistoryTable
-                claimsHistory={claimsHistory}
-                handleDecision={handleDecision}
-                handleExportCsv={handleExportCsv}
-              />
-            </div>
+        <div className="work-grid">
+          <div>
+            <UploadZone
+              domainMode={domainMode} setDomainMode={setDomainMode}
+              file={file} previewUrl={previewUrl} loading={loading}
+              allowCloudProcessing={allowCloudProcessing}
+              setAllowCloudProcessing={setAllowCloudProcessing}
+              handleFileChange={handleFileChange}
+              handleAnalyze={handleAnalyze}
+              setFile={setFile} setPreviewUrl={setPreviewUrl}
+              setResult={setResult} setError={setError}
+            />
 
-            <ResultsDashboard result={result} loading={loading} />
+            <HistoryTable
+              claimsHistory={claimsHistory}
+              handleDecision={handleDecision}
+              handleExportCsv={handleExportCsv}
+              actionLoadingId={actionLoadingId}
+            />
+          </div>
+
+          <ResultsDashboard
+            result={result}
+            loading={loading}
+          />
+        </div>
+        <FeatureShaderCards />
           </div>
         )}
-
-        {/* Tab 2: Patient Case & Policy Navigator */}
-        {activeTab === 'policy' && <PolicyNavigator />}
+        {activeTab === 'calendar' && (
+          <div id="panel-calendar" className="app-tab-panel" role="tabpanel" aria-labelledby="tab-calendar" tabIndex={0}>
+            <BenefitCalendar claims={claimsHistory} />
+          </div>
+        )}
+        {activeTab === 'scamcheck' && (
+          <div id="panel-scamcheck" className="app-tab-panel" role="tabpanel" aria-labelledby="tab-scamcheck" tabIndex={0}>
+            <ScamCheck />
+          </div>
+        )}
+        {activeTab === 'insurers' && (
+          <div id="panel-insurers" className="app-tab-panel" role="tabpanel" aria-labelledby="tab-insurers" tabIndex={0}>
+            <InsurerKnowledge />
+          </div>
+        )}
+        {activeTab === 'navigator' && (
+          <div id="panel-navigator" className="app-tab-panel" role="tabpanel" aria-labelledby="tab-navigator" tabIndex={0}>
+            <PolicyNavigator />
+          </div>
+        )}
       </main>
     </ErrorBoundary>
   );

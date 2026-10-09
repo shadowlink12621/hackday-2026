@@ -38,9 +38,161 @@ export async function getHealth() {
   return response.json();
 }
 
-export async function getClaims() {
+export async function checkModelConnection() {
+  const response = await request('/model/check', { method: 'POST' });
+  return response.json();
+}
+
+export function getCalendarIcsUrl(claimId) {
+  return `${API}/claims/${encodeURIComponent(claimId)}/calendar.ics`;
+}
+
+export function getExportCsvUrl() {
+  return `${API}/export.csv`;
+}
+
+// Case & Policy APIs
+export async function createCase(caseData) {
+  const response = await request('/cases', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(caseData),
+  });
+  return response.json();
+}
+
+export async function listCases() {
+  try {
+    const response = await request('/cases');
+    return response.json();
+  } catch (e) {
+    return [];
+  }
+}
+
+export async function getCase(id) {
+  const response = await request(`/cases/${encodeURIComponent(id)}`);
+  return response.json();
+}
+
+export async function getCases() {
+  const response = await request('/cases');
+  return response.json();
+}
+
+export function getCaseDocumentUrl(caseId, documentId) {
+  return `${API}/cases/${encodeURIComponent(caseId)}/documents/${encodeURIComponent(documentId)}/download`;
+}
+
+export async function downloadCaseDocument(caseId, documentId) {
+  const response = await request(`/cases/${encodeURIComponent(caseId)}/documents/${encodeURIComponent(documentId)}/download`);
+  return response.blob();
+}
+
+export async function saveCaseReminder(caseId, confirmedDate) {
+  const response = await request(`/cases/${encodeURIComponent(caseId)}/reminder`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirmed_date: confirmedDate }),
+  });
+  return response.json();
+}
+
+export async function uploadCaseDocument(caseId, file, category, allowCloudProcessing = false) {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('category', category);
+  form.append('allow_cloud_processing', String(allowCloudProcessing));
+  const response = await request(`/cases/${encodeURIComponent(caseId)}/documents`, {
+    method: 'POST',
+    body: form,
+  });
+  return response.json();
+}
+
+export async function askPolicy(policyId, question, allowCloudProcessing = false) {
+  const response = await request(`/policies/${encodeURIComponent(policyId)}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question, allow_cloud_processing: allowCloudProcessing }),
+  });
+  return response.json();
+}
+
+export async function generatePolicySummary(policyId, allowCloudProcessing = false) {
+  const response = await request(`/policies/${encodeURIComponent(policyId)}/summary`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ allow_cloud_processing: allowCloudProcessing }),
+  });
+  return response.json();
+}
+
+export async function uploadPolicy(caseId, file) {
+  const form = new FormData();
+  form.append('file', file);
+  const response = await request(`/policies`, {
+    method: 'POST',
+    body: form,
+  });
+  // Return the newly created policy_id object instead of caseId linkage
+  return response.json();
+}
+
+export async function getPolicy(policyId) {
+  const response = await request(`/policies/${encodeURIComponent(policyId)}`);
+  return response.json();
+}
+
+export async function addEvent(caseId, eventData) {
+  const response = await request(`/cases/${encodeURIComponent(caseId)}/events`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(eventData),
+  });
+  return response.json();
+}
+
+export function getCaseIcsUrl(caseId) {
+  return `${API}/cases/${encodeURIComponent(caseId)}/calendar.ics`;
+}
+
+export async function chatCase(policyId, question) {
+  const response = await request(`/policies/${encodeURIComponent(policyId)}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question }),
+  });
+  return response.json();
+}
+
+
+export async function fetchInsurers() {
+  const response = await request('/insurers');
+  return response.json();
+}
+
+export async function fetchInsurerKnowledge(insurerKey) {
+  const response = await request(`/insurers/${encodeURIComponent(insurerKey)}`);
+  return response.json();
+}
+
+export async function fetchModelStatus() {
+  const response = await request('/model/status');
+  return response.json();
+}
+
+export async function getModelStatus() {
+  return fetchModelStatus();
+}
+
+export async function fetchClaims() {
   const response = await request('/claims');
   return response.json();
+}
+
+export async function getClaims() {
+  return fetchClaims();
 }
 
 export async function saveDecision(claimId, decision) {
@@ -73,99 +225,4 @@ export async function checkScamMessage(messageText) {
     body: JSON.stringify({ message_text: messageText }),
   });
   return response.json();
-}
-
-export async function getInsurers() {
-  const response = await request('/insurers');
-  return response.json();
-}
-
-export async function getInsurerDetails(insurerKey) {
-  const response = await request(`/insurers/${encodeURIComponent(insurerKey)}`);
-  return response.json();
-}
-
-export async function getModelStatus() {
-  const response = await request('/model/status');
-  return response.json();
-}
-
-export async function checkModelConnection() {
-  const response = await request('/model/check', { method: 'POST' });
-  return response.json();
-}
-
-export async function getCases() {
-  const response = await request('/cases');
-  return response.json();
-}
-
-export async function createCase(patient) {
-  const response = await request('/cases', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(patient),
-  });
-  return response.json();
-}
-
-export async function getCase(caseId) {
-  const response = await request(`/cases/${encodeURIComponent(caseId)}`);
-  return response.json();
-}
-
-export async function saveCaseReminder(caseId, confirmedDate) {
-  const response = await request(`/cases/${encodeURIComponent(caseId)}/reminder`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ confirmed_date: confirmedDate || null }),
-  });
-  return response.json();
-}
-
-export async function uploadCaseDocument(caseId, file, category) {
-  const form = new FormData();
-  form.append('file', file);
-  form.append('category', category);
-  const response = await request(`/cases/${encodeURIComponent(caseId)}/documents`, {
-    method: 'POST',
-    body: form,
-  });
-  return response.json();
-}
-
-export async function getPolicy(policyId) {
-  const response = await request(`/policies/${encodeURIComponent(policyId)}`);
-  return response.json();
-}
-
-export async function askPolicy(policyId, question, allowCloudProcessing = false) {
-  const response = await request(`/policies/${encodeURIComponent(policyId)}/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question, allow_cloud_processing: allowCloudProcessing }),
-  });
-  return response.json();
-}
-
-export async function generatePolicySummary(policyId, allowCloudProcessing = false) {
-  const response = await request(`/policies/${encodeURIComponent(policyId)}/summary`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ allow_cloud_processing: allowCloudProcessing }),
-  });
-  return response.json();
-}
-
-export function getCaseDocumentUrl(caseId, documentId) {
-  return `${API}/cases/${encodeURIComponent(caseId)}/documents/${encodeURIComponent(documentId)}/download`;
-}
-
-export async function downloadCaseDocument(caseId, documentId) {
-  const response = await request(`/cases/${encodeURIComponent(caseId)}/documents/${encodeURIComponent(documentId)}/download`);
-  return response.blob();
-}
-
-export function getCalendarIcsUrl(claimId) {
-  return `${API}/claims/${encodeURIComponent(claimId)}/calendar.ics`;
 }

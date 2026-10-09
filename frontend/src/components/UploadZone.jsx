@@ -59,8 +59,7 @@ export default function UploadZone({
           type="file" 
           ref={fileInputRef} 
           onChange={handleFileChange} 
-          accept="application/pdf,.pdf,image/jpeg,image/png,.jpg,.jpeg,.png"
-          style={{ display: 'none' }}
+          accept="image/jpeg,image/png,application/pdf,.jpg,.jpeg,.png,.pdf"
         />
         
         {isPdf ? (
@@ -77,10 +76,15 @@ export default function UploadZone({
           <>
             <div className="upload-icon upload-symbol">↑</div>
             <strong>Drag and drop file here</strong>
-            <span>PDF up to 20 MB · JPEG/PNG up to 5 MB</span>
+            <span>JPG or PNG up to 5 MB · PDF up to 20 MB</span>
           </>
         )}
       </div>
+
+      <label className="consent-line upload-cloud-consent">
+        <input type="checkbox" checked={allowCloudProcessing} onChange={(event) => setAllowCloudProcessing(event.target.checked)} />
+        I consent to send this document to Gemma for extraction. Leave unchecked for local/offline processing.
+      </label>
 
       <label className="consent-line upload-cloud-consent">
         <input type="checkbox" checked={allowCloudProcessing} onChange={(event) => setAllowCloudProcessing(event.target.checked)} />

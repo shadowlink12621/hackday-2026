@@ -27,15 +27,11 @@ def test_ingest_policy_and_page_retrieval(monkeypatch):
         def extract_text(self):
             return self.text
 
-    monkeypatch.setattr(
-        policy_store,
-        "PdfReader",
-        lambda _: SimpleNamespace(pages=[
-            FakePage("Policy schedule. OPD cover is INR 3000 per family."),
-            FakePage("Specific waiting period: cataract is 12 months."),
-            FakePage(""),
-        ]),
-    )
+    monkeypatch.setattr(policy_store, "extract_pdf_pages", lambda _: [
+        {"page": 1, "text": "Policy schedule. OPD cover is INR 3000 per family.", "images": []},
+        {"page": 2, "text": "Specific waiting period: cataract is 12 months.", "images": []},
+        {"page": 3, "text": "", "images": []},
+    ])
     saved = policy_store.ingest_policy_pdf(b"%PDF demo bytes", "demo-policy.pdf")
     assert saved["page_count"] == 3
     assert saved["unreadable_pages"] == [3]
@@ -111,11 +107,9 @@ def test_policy_summary_api_forwards_explicit_consent_and_source_pages(monkeypat
         def extract_text(self):
             return self.text
 
-    monkeypatch.setattr(
-        policy_store,
-        "PdfReader",
-        lambda _: SimpleNamespace(pages=[FakePage("Policy name: Example Plan. Coverage period listed.")]),
-    )
+    monkeypatch.setattr(policy_store, "extract_pdf_pages", lambda _: [
+        {"page": 1, "text": "Policy name: Example Plan. Coverage period listed.", "images": []},
+    ])
     policy_id = policy_store.ingest_policy_pdf(b"%PDF summary fixture", "fixture.pdf")["policy_id"]
     received = {}
 
@@ -225,7 +219,7 @@ def test_gemma4_is_default_and_full_policy_summary_covers_every_page(monkeypatch
 
         def generate_content(self, **kwargs):
             self.calls += 1
-            pages_in_prompt = [int(value) for value in re.findall(r"\[PDF page (\d+)\]", kwargs["contents"])]
+            pages_in_prompt = [int(value) for value in re.findall(r"\[PDF page (\d+)", kwargs["contents"])]
             first = pages_in_prompt[0]
             return SimpleNamespace(text=json.dumps({
                 "insurer": None,
@@ -256,7 +250,15 @@ def test_gemma4_is_default_and_full_policy_summary_covers_every_page(monkeypatch
     pages = [{"page": page, "text": f"Policy clause page {page}"} for page in range(1, 22)]
     result = gemma_client.summarize_policy_pages(pages, allow_cloud_processing=True)
 
-    assert models.calls == 3
+    assert models.calls == 3, result
     assert result["pages_processed"] == 21
     assert result["model_used"] == "cloud_gemma (gemma-4-26b-a4b-it)"
     assert [fact["pages"][0] for fact in result["summary"]["benefits"]] == [1, 11, 21]
+
+
+def test_scanned_policy_requires_explicit_cloud_consent(monkeypatch):
+    monkeypatch.setattr(policy_store, "extract_pdf_pages", lambda _: [
+        {"page": 1, "text": "", "images": [{"bytes": b"image", "mime_type": "image/png"}]},
+    ])
+    with pytest.raises(ValueError, match="Enable cloud-processing consent"):
+        policy_store.ingest_policy_pdf(b"%PDF scanned", "scanned.pdf")

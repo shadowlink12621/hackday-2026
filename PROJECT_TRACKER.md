@@ -35,10 +35,9 @@ This is the unified project tracking board for the ClaimGuard team.
 - [x] **Local Insurer Knowledge Base**: Build markdown knowledge base (`backend/knowledge/`) for HDFC ERGO, Star Health, Niva Bupa, Care Health, ICICI Lombard, and SBI General with real-world claim repudiation traps (lifestyle/smoking disclosures, room rent proportional deductions, 15-bed minimums, consumables exclusions).
 - [x] **Benefit & Deadline Calendar Engine**: Generate RFC 5545 `.ics` reminders (`GET /api/claims/{id}/calendar.ics`); generic intervals are now labeled provisional, not statutory or policy deadlines.
 - [x] **ScamCheck Engine**: Analyze SMS, email, and WhatsApp messages for insurance refund fee extortion (`POST /api/scamcheck`) referencing IRDAI Bima Bharosa warnings.
-- [x] **Hybrid model architecture**: Support Google GenAI, optional Local Ollama (`http://localhost:11434`), and honest offline source retrieval with `GET /api/model/status`.
+- [x] **Hybrid Gemma Architecture**: Support Cloud Gemma 4, Local Ollama open-source Gemma (`http://localhost:11434`), and a non-fabricating offline unavailable state with `GET /api/model/status`.
 - [x] **Interactive Claim Chat**: Add `POST /api/chat` to allow conversational Q&A with Gemma about specific audited claims.
 - [x] **Developer Scripts**:
-  - `backend/scripts/seed_demo_claims.py`: Idempotent seeder with 4 realistic claims.
   - `backend/scripts/validate_insurer_knowledge.py`: Validates all 6 insurer trap files.
   - `backend/scripts/benchmark_gemma.py`: Multi-tier benchmark utility for Gemma.
   - `backend/scripts/validate_cli.py`: Standalone CLI claim validator.
@@ -48,7 +47,7 @@ This is the unified project tracking board for the ClaimGuard team.
 - [x] Store extracted policy text locally; deduplicate repeat uploads and do not retain source PDF bytes.
 - [x] Add retrieval-backed profile and policy chat APIs with page citations.
 - [x] Keep offline replies extractive and explicit when no language model is available.
-- [x] Add redacted policy UI fixture and detailed Person B handoff.
+- [x] Add source-backed policy UI and detailed Person B handoff.
 - [x] Replace the four-topic sample profile with an upload-derived 15-topic evidence profile.
 - [x] Add local patient cases with isolated case metadata, document uploads/downloads, and case-linked policy indexing.
 - [x] Make offline extraction report “Not extracted” with zero confidence instead of fake sample patients/bills.
@@ -56,14 +55,14 @@ This is the unified project tracking board for the ClaimGuard team.
 - [x] Load model credentials from ignored `.env`; do not commit keys.
 - [x] Verify case/document APIs and the local 59-page SBI policy using temporary DB/storage; profile returns indexed evidence and chat citations.
 - [x] Verify no-model claim uploads cannot be marked approved; backend suite currently 33 passing.
-- [ ] Configure a real API key locally and verify a live model request; no key is currently configured.
+- [ ] Verify a live Gemma model request with the local API key.
 - [x] Replace in-progress sample policy/patient/chat UI with empty states, case selection, API-backed policy/documents, source citations, runtime status, and cloud-consent controls.
 - [x] Remove canned scam/policy fallback answers; support PDF/JPEG/PNG claim documents with per-format limits and explicit cloud consent.
 - [x] Add opt-in cloud OCR for scanned claim PDFs; searchable claim PDFs use local extraction with mandatory human-review flag.
 - [x] Persist a user-confirmed reminder date on its patient case; never calculate an unverified deadline.
 - [x] Add optional shared-token API auth and a browser token gate; production mode fails closed if the token is missing.
 - [ ] Add cited, consent-based medical-record interpretation and robust insured-member identity extraction; not included in this merge because extracted health identity must be handled locally or under clear consent.
-- [ ] Configure a real API key and verify live model response; no key is present in the local environment.
+- [ ] Verify a live Gemma response after restarting the backend with the updated model selection.
 
 ---
 
