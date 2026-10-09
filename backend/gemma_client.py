@@ -1,5 +1,5 @@
 import os
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import json
 
 try:
@@ -9,18 +9,22 @@ try:
 except ImportError:
     HAS_GENAI = False
 
-class FormExtraction(BaseModel):
-    document_type: str
-    has_signature: bool
-    has_date: bool
+class LineItem(BaseModel):
+    description: str
+    amount: float
+
+class ReceiptExtraction(BaseModel):
+    vendor_name: str
     date_extracted: str | None
-    has_official_stamp: bool
+    currency: str = Field(description="e.g. USD, INR, EUR")
+    items: list[LineItem]
+    total_extracted: float
     confidence_score: float
 
-def extract_form_data(file_bytes: bytes, mime_type: str, user_prompt: str, domain_mode: str) -> tuple[FormExtraction, bool]:
+def extract_form_data(file_bytes: bytes, mime_type: str, user_prompt: str, domain_mode: str) -> tuple[ReceiptExtraction, bool]:
     """
-    Uses Gemma 4 (via GenAI SDK) to analyze the document.
-    Returns (FormExtraction, is_mock).
+    Uses Gemma 4 (via GenAI SDK) to analyze the receipt.
+    Returns (ReceiptExtraction, is_mock).
     Falls back to a mock deterministic response if API is unavailable.
     """
     api_key = os.environ.get("GEMINI_API_KEY")
@@ -32,15 +36,11 @@ def extract_form_data(file_bytes: bytes, mime_type: str, user_prompt: str, domai
             model = "gemini-2.5-flash" 
             
             prompt = f"""
-            Domain Mode: {domain_mode}
-            User Prompt: {user_prompt}
-            
-            Analyze this uploaded document.
-            Identify the document type.
-            Check if it has a physical or digital signature.
-            Check if a date is written, and extract it if so.
-            Check if there is an official stamp.
-            Provide a confidence score between 0.0 and 1.0.
+            Analyze this uploaded receipt.
+            Extract the vendor name, date, and currency used.
+            List all line items with their amounts.
+            Extract the total amount as written on the receipt.
+            Provide a confidence score (0.0 to 1.0).
             """
             
             response = client.models.generate_content(
@@ -51,24 +51,27 @@ def extract_form_data(file_bytes: bytes, mime_type: str, user_prompt: str, domai
                 ],
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
-                    response_schema=FormExtraction,
+                    response_schema=ReceiptExtraction,
                     temperature=0.1
                 )
             )
             
             is_mock = False
-            return FormExtraction.model_validate_json(response.text), is_mock
+            return ReceiptExtraction.model_validate_json(response.text), is_mock
         except Exception as e:
             print(f"GenAI API failed, falling back to mock. Error: {e}")
     
     # Fallback / Mock Mode
     print("Using offline mock mode (no API key, missing file, or API failed)")
-    mock_data = FormExtraction(
-        document_type=f"Mocked {domain_mode.capitalize()} Document",
-        has_signature=True,
-        has_date=True,
+    mock_data = ReceiptExtraction(
+        vendor_name="Starbucks (MOCKED)",
         date_extracted="2026-10-09",
-        has_official_stamp=False,
-        confidence_score=0.85
+        currency="USD",
+        items=[
+            LineItem(description="Venti Latte", amount=6.50),
+            LineItem(description="Croissant", amount=3.50)
+        ],
+        total_extracted=10.00,
+        confidence_score=0.92
     )
     return mock_data, is_mock

@@ -1,15 +1,13 @@
-# Challenge Constraints & Archetype (To Be Filled)
+# ClaimGuard (Policy & Expense Validator)
 
-## Official Challenge Text
-*(Paste the exact challenge requirements here once the hackathon officially drops)*
-
-## Selected Archetype
-*(e.g., Visual Accessibility Validator, Code Architecture Auditor, Open-Source Triage Skill)*
+## Archetype
+We are building **ClaimGuard** (aka BillBuddy), an enterprise-grade AI expense validator. It takes messy, crumpled receipts and strictly validates them against corporate policy using Gemma 4 for perception and Python for deterministic math/fraud detection.
 
 ## The Split
 1. **Gemma's Exact Job (Perception):**
-   * What exactly is the LLM responsible for? 
-   * Example: "Extract dates, signatures, and stamps from the uploaded form image into a strict JSON schema."
+   * Uses Multimodal reasoning to read crumpled, faded, or handwritten receipts (`.jpg` or `.png`).
+   * Extracts vendor name, date, currency, and an array of line items with their amounts into strict JSON.
 2. **Deterministic Engine's Exact Job (Validation):**
-   * What exactly is the hardcoded software responsible for?
-   * Example: "Verify mathematically that the extracted date is valid and that a signature exists. Fail the application if rules are broken."
+   * **Fraud Detection**: Computes a SHA-256 hash of the image and checks a local SQLite DB for duplicates.
+   * **Currency Orchestration**: Converts foreign currency to INR.
+   * **Policy Limit**: Sums the line items and fails the claim if the total exceeds company policy (e.g., ₹4000).
