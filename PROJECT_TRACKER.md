@@ -27,9 +27,9 @@ This is the shared progress board. Check `origin/master`, `git status -sb`, and 
 ### A2: Codex Lane — Parallel Scripting & Hardening
 - [x] Seed realistic demo claims idempotently (`backend/scripts/seed_demo_claims.py`).
 - [x] Sanitize CSV export against spreadsheet formula injection (`'=...`).
-- [x] Expose insurer knowledge endpoints (`GET /api/insurers`, `GET /api/insurers/{key}`).
-- [ ] Codex Task 1: Insurer policy checklist validator script (`backend/scripts/validate_insurer_knowledge.py`).
-- [ ] Codex Task 2: Local Ollama vs Cloud Gemma benchmark utility (`backend/scripts/benchmark_gemma.py`).
+- [x] Codex Task 1: Insurer policy checklist validator script (`backend/scripts/validate_insurer_knowledge.py`).
+- [x] Codex Task 2: Local Ollama vs Cloud Gemma benchmark utility (`backend/scripts/benchmark_gemma.py`).
+- [x] Standalone terminal validator utility (`backend/scripts/validate_cli.py`).
 
 ---
 
