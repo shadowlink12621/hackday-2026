@@ -49,8 +49,14 @@ This is the unified project tracking board for the ClaimGuard team.
 - [x] Add retrieval-backed profile and policy chat APIs with page citations.
 - [x] Keep offline replies extractive and explicit when no language model is available.
 - [x] Add redacted policy UI fixture and detailed Person B handoff.
-- [x] Complete backend test suite (25 passed) and verify upload/chat against the local 59-page sample in a temporary database.
-- [ ] Person B implements policy upload/profile cards, citation chat, model mode, and reminder UI on `feat/frontend`.
+- [x] Replace the four-topic sample profile with an upload-derived 15-topic evidence profile.
+- [x] Add local patient cases with isolated case metadata, document uploads/downloads, and case-linked policy indexing.
+- [x] Make offline extraction report “Not extracted” with zero confidence instead of fake sample patients/bills.
+- [x] Load model credentials from ignored `.env`; do not commit keys.
+- [x] Verify case/document APIs and the local 59-page SBI policy using temporary DB/storage.
+- [ ] Configure a real API key locally and verify a live model request; no key is currently configured.
+- [ ] Person B removes canned policy/scam answers and seeded profile values; connects the wizard, case APIs, profile cards, model status, evidence chat, and user-confirmed reminders.
+- [ ] Add OCR, real blood-report extraction, structured policy-holder/member extraction, exhaustive clause coverage, cloud consent UI, and auth before any public deployment with personal data.
 
 ---
 

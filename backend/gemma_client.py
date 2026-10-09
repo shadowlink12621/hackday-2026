@@ -61,6 +61,8 @@ def get_model_status() -> dict:
 
     return {
         "cloud_gemma_available": bool(cloud_key and HAS_GENAI),
+        "cloud_gemma_configured": bool(cloud_key and HAS_GENAI),
+        "cloud_connectivity_checked": False,
         "cloud_model": os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it"),
         "local_ollama_online": local_ollama_online,
         "local_ollama_host": ollama_host,
