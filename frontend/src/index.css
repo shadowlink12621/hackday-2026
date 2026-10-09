@@ -1134,7 +1134,7 @@ tbody tr:hover td { background: rgba(255, 255, 255, 0.02); }
 .fact-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .fact-heading h3 { margin: 0; font-size: 15px; }
 .source-excerpt { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); min-width: 0; }
-.source-excerpt p { margin: 7px 0 0; color: var(--muted); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.source-excerpt p { margin: 8px 0 0; color: #d4e0df; font-size: 14px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 280px; overflow: auto; padding-right: 6px; }
 .generated-summary { display: grid; gap: 9px; margin-top: 14px; }
 .generated-summary h3 { margin: 0; font-size: 14px; text-transform: capitalize; }
 .generated-summary article { min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 6px; overflow-wrap: anywhere; }
@@ -1158,6 +1158,20 @@ tbody tr:hover td { background: rgba(255, 255, 255, 0.02); }
 .scam-input textarea { margin: 6px 0 12px; }
 .notice-success { color: #b8f6df; }
 .workflow-progress { color: var(--muted); font-size: 12px; }
+.preview-document { display: grid; justify-items: center; gap: 10px; max-width: min(90%, 360px); color: #e6f0ef; overflow-wrap: anywhere; }
+.preview-document strong { display: grid; place-items: center; width: 72px; aspect-ratio: 1; border: 1px solid var(--teal-dim); border-radius: 8px; color: var(--teal); font-size: 20px; }
+.preview-document small { color: var(--muted); }
+.upload-cloud-consent { margin-bottom: 12px; }
+.model-connection-check { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0; }
+.model-connection-check p { margin: 0; font-size: 12px; overflow-wrap: anywhere; }
+.connection-ok { color: #83e2b9; }
+.connection-failed { color: #ffb6a9; }
+.access-gate { display: grid; min-height: 100vh; place-items: center; padding: 24px; background: #071113; color: #eaf1f2; }
+.access-gate-form { display: grid; width: min(100%, 440px); gap: 14px; padding: 26px; }
+.access-gate-form h1 { margin: 0; font-size: 24px; }
+.access-gate-form p { color: var(--muted); font-size: 13px; line-height: 1.55; }
+.access-gate-form label { display: grid; gap: 7px; color: var(--muted); font-size: 12px; }
+.access-gate-form input { padding: 11px 12px; border: 1px solid var(--line); border-radius: 6px; background: #0b1719; color: #fff; }
 @media (max-width: 860px) {
   .review-grid, .scam-grid { grid-template-columns: 1fr; }
   .policy-chat { position: static; }

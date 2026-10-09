@@ -26,7 +26,7 @@ This is the unified project tracking board for the ClaimGuard team.
 - [x] Standardize upload contract on `POST /api/validate` returning `perception` and `validation`.
 
 ### Stage 3: Hardening and Edge Cases
-- [x] Reject files over 5 MB and unsupported MIME types at the validation endpoint.
+- [x] Enforce bounded PDF (20 MB), JPEG/PNG (5 MB), and MIME/signature checks at validation.
 - [x] Handle transient SQLite lock errors with WAL mode and retry decorator.
 - [x] Test health, validation, claims, decisions, CSV export, and lock retry behavior (21/21 tests passing).
 - [x] Clean up backend code and verify fallback behavior.
@@ -55,10 +55,14 @@ This is the unified project tracking board for the ClaimGuard team.
 - [x] Load model credentials from ignored `.env`; do not commit keys.
 - [x] Verify case/document APIs and the local 59-page SBI policy using temporary DB/storage; profile returns indexed evidence and chat citations.
 - [x] Verify no-model claim uploads cannot be marked approved; backend suite currently 33 passing.
-- [ ] Configure a real API key locally and verify a live model request; no key is currently configured.
+- [ ] Verify a live Gemma model request with the local API key.
 - [x] Replace in-progress sample policy/patient/chat UI with empty states, case selection, API-backed policy/documents, source citations, runtime status, and cloud-consent controls.
-- [x] Remove canned scam/policy fallback answers and remove PDF acceptance from the image-only claim control.
-- [ ] Implement medical-record AI interpretation, OCR, robust policy-holder/member identity extraction, server-persisted reminders, and auth before public deployment with personal data.
+- [x] Remove canned scam/policy fallback answers; support PDF/JPEG/PNG claim documents with per-format limits and explicit cloud consent.
+- [x] Add opt-in cloud OCR for scanned claim PDFs; searchable claim PDFs use local extraction with mandatory human-review flag.
+- [x] Persist a user-confirmed reminder date on its patient case; never calculate an unverified deadline.
+- [x] Add optional shared-token API auth and a browser token gate; production mode fails closed if the token is missing.
+- [ ] Add cited, consent-based medical-record interpretation and robust insured-member identity extraction; not included in this merge because extracted health identity must be handled locally or under clear consent.
+- [ ] Verify a live Gemma response after restarting the backend with the updated model selection.
 
 ---
 
@@ -80,8 +84,8 @@ This is the unified project tracking board for the ClaimGuard team.
 - [x] Configure Playwright to run the frontend locally in Chromium.
 - [x] Test an approved corporate expense and a flagged health insurance claim with mocked API responses.
 - [x] Test CSV download and display of backend validation errors.
-- [x] Run Playwright flows successfully.
-- [x] Add case/policy/chat flow browser test; latest serial Playwright run passed 5/5.
+- [x] Run the focused case/policy/chat browser flow successfully after integration.
+- [ ] Rerun all Playwright cases; the constrained Windows runner crashed Chromium workers for memory, though the focused case/policy test passed.
 
 ### Stage 4: Local Docker Deployment
 - [x] Add multi-stage frontend Dockerfile (Vite build + static server on port 5173).
@@ -93,7 +97,7 @@ This is the unified project tracking board for the ClaimGuard team.
 - [x] Build API-backed patient registration and per-case local document storage.
 - [x] Replace placeholder policy facts and chat answers with uploaded-policy evidence, cited chat, and explicit cloud consent.
 - [x] Remove static scam examples and canned fallback verdicts.
-- [x] Add user-confirmed date and local `.ics` export without assuming a statutory/policy deadline.
+- [x] Add case-persisted user-confirmed date and `.ics` export without assuming a statutory/policy deadline.
 - [ ] Merge these UI changes from `feat/core-ai` into `feat/frontend` so Person B can continue demo polish.
 
 ---

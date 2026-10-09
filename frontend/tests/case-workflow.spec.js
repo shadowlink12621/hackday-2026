@@ -3,11 +3,12 @@ import { expect, test } from '@playwright/test';
 test('creates a patient case, links a policy, and asks with source citations', async ({ page }) => {
   let savedCase = null;
   let policyAttached = false;
-  await page.route('http://localhost:8000/api/health', (route) => route.fulfill({ json: { status: 'ok' } }));
+  await page.route('http://localhost:8000/api/health', (route) => route.fulfill({ json: { status: 'ok', authentication_required: false } }));
   await page.route('http://localhost:8000/api/claims', (route) => route.fulfill({ json: [] }));
   await page.route('http://localhost:8000/api/model/status', (route) => route.fulfill({ json: {
     active_backend: 'cloud_gemma', cloud_gemma_configured: true, cloud_model: 'test-model', local_ollama_online: false,
   } }));
+  await page.route('http://localhost:8000/api/model/check', (route) => route.fulfill({ json: { ok: true, model: 'test-model' } }));
   await page.route('http://localhost:8000/api/cases', async (route) => {
     if (route.request().method() === 'POST') {
       const payload = route.request().postDataJSON();
@@ -17,6 +18,11 @@ test('creates a patient case, links a policy, and asks with source citations', a
     return route.fulfill({ json: savedCase ? [{ case_id: 7, patient_name: savedCase.patient_name }] : [] });
   });
   await page.route('http://localhost:8000/api/cases/7', (route) => route.fulfill({ json: savedCase }));
+  await page.route('http://localhost:8000/api/cases/7/reminder', async (route) => {
+    savedCase.reminder_date = route.request().postDataJSON().confirmed_date;
+    savedCase.reminder_confirmed_at = savedCase.reminder_date ? '2026-10-09T00:00:00Z' : null;
+    return route.fulfill({ json: { case_id: 7, confirmed_date: savedCase.reminder_date } });
+  });
   await page.route('http://localhost:8000/api/cases/7/documents', async (route) => {
     policyAttached = true;
     savedCase.documents = [{
@@ -69,6 +75,8 @@ test('creates a patient case, links a policy, and asks with source citations', a
   await expect.poll(() => policyAttached).toBe(true);
   await expect(page.getByRole('heading', { name: 'Example Insurer' })).toBeVisible();
   await expect(page.getByText('Example clause from the user-uploaded test document.')).toBeVisible();
+  await page.getByRole('button', { name: 'Test AI connection' }).click();
+  await expect(page.getByText('Connected · test-model')).toBeVisible();
   const summaryButton = page.getByRole('button', { name: 'Generate cited policy outline' });
   await expect(summaryButton).toBeDisabled();
   const consent = page.getByLabel(/I consent to cloud processing/);

@@ -16,13 +16,6 @@ export default function PolicyFacts({ facts }) {
     }
   };
 
-  const handlePageClick = (e, page) => {
-    // Attempt to open PDF at specific page if supported. 
-    // Usually this is done via standard href like `#page=9` for PDF viewers.
-    // For this UI, we just alert or rely on default browser behavior for PDFs if we had the actual file.
-    // We will leave the href so it tries to trigger it if a viewer is active.
-  };
-
   return (
     <div style={{ marginTop: '16px' }}>
       <h3 style={{ color: '#fff', marginBottom: '16px' }}>Extracted Policy Facts</h3>
@@ -42,15 +35,12 @@ export default function PolicyFacts({ facts }) {
               </p>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 {fact.pages.map((p) => (
-                  <a 
-                    key={p} 
-                    href={`#page=${p}`} 
-                    onClick={(e) => handlePageClick(e, p)}
+                  <span
+                    key={p}
                     style={{ background: 'rgba(255,255,255,0.1)', padding: '4px 8px', borderRadius: '4px', color: '#8d9ba8', textDecoration: 'none', fontSize: '13px' }}
-                    title={`View PDF Page ${p}`}
                   >
-                    📄 Page {p}
-                  </a>
+                    Page {p}
+                  </span>
                 ))}
               </div>
             </div>

@@ -1,12 +1,8 @@
 import React, { useRef } from 'react';
 
-function formatFileSize(bytes) {
-  return bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
-}
-
 export default function UploadZone({ 
   domainMode, setDomainMode, file, previewUrl, 
-  loading, handleFileChange, handleAnalyze, setFile, setPreviewUrl, setResult, setError
+  loading, handleFileChange, handleAnalyze, allowCloudProcessing, setAllowCloudProcessing,
 }) {
   const fileInputRef = useRef(null);
 
@@ -24,13 +20,11 @@ export default function UploadZone({
     e.preventDefault();
     e.currentTarget.classList.remove('dragover');
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const dropped = e.dataTransfer.files[0];
-      setFile(dropped);
-      setPreviewUrl(dropped.type === 'application/pdf' ? null : URL.createObjectURL(dropped));
-      setResult(null);
-      setError(null);
+      handleFileChange({ target: { files: e.dataTransfer.files } });
     }
   };
+
+  const isPdf = file && (file.type === 'application/pdf' || file.name?.toLowerCase().endsWith('.pdf'));
 
   return (
     <section className="card intake-card">
@@ -68,11 +62,13 @@ export default function UploadZone({
           accept="image/jpeg,image/png,application/pdf,.jpg,.jpeg,.png,.pdf"
         />
         
-        {file?.type === 'application/pdf' ? (
-          <div className="pdf-selected" aria-label="Selected PDF file">
-            <span className="pdf-selected-icon">PDF</span>
-            <strong>{file.name}</strong>
-            <span>{formatFileSize(file.size)} · PDF</span>
+        {isPdf ? (
+          <div style={{ textAlign: 'center', padding: '16px' }}>
+            <div style={{ fontSize: '48px', marginBottom: '8px' }}>📄</div>
+            <strong style={{ color: '#38bdf8', wordBreak: 'break-word' }}>{file.name}</strong>
+            <div style={{ color: '#94a3b8', fontSize: '12px', marginTop: '4px' }}>
+              PDF · {(file.size / 1024).toFixed(0)} KB
+            </div>
           </div>
         ) : previewUrl ? (
           <img src={previewUrl} alt="Receipt Preview" className="preview-image" />
@@ -80,13 +76,24 @@ export default function UploadZone({
           <>
             <div className="upload-icon upload-symbol">↑</div>
             <strong>Drag and drop file here</strong>
-            <span>JPG, PNG, or searchable PDF up to 5MB</span>
+            <span>JPG or PNG up to 5 MB · PDF up to 20 MB</span>
           </>
         )}
       </div>
+
+      <label className="consent-line upload-cloud-consent">
+        <input type="checkbox" checked={allowCloudProcessing} onChange={(event) => setAllowCloudProcessing(event.target.checked)} />
+        I consent to send this document to Gemma for extraction. Leave unchecked for local/offline processing.
+      </label>
+
+      <label className="consent-line upload-cloud-consent">
+        <input type="checkbox" checked={allowCloudProcessing} onChange={(event) => setAllowCloudProcessing(event.target.checked)} />
+        I consent to send this document to the configured cloud AI provider for extraction. Leave unchecked for local/offline processing.
+      </label>
       
       <button 
         className="primary-button" 
+        id="process-claim-btn"
         onClick={handleAnalyze} 
         disabled={!file || loading}
       >

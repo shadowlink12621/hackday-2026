@@ -99,3 +99,65 @@ def test_offline_validation_cannot_return_an_approved_claim(monkeypatch):
     assert payload["perception"]["confidence"] == 0.0
     assert payload["validation"]["is_valid"] is False
     assert any(rule["rule_name"] == "Model extraction unavailable" for rule in payload["validation"]["results"])
+
+
+def test_user_confirmed_reminder_persists_on_case():
+    created = client.post("/api/cases", json={"patient_name": "Local Test Patient"})
+    case_id = created.json()["case_id"]
+    saved = client.post(f"/api/cases/{case_id}/reminder", json={"confirmed_date": "2026-11-15"})
+    assert saved.status_code == 200
+    assert client.get(f"/api/cases/{case_id}").json()["reminder_date"] == "2026-11-15"
+
+    cleared = client.post(f"/api/cases/{case_id}/reminder", json={"confirmed_date": None})
+    assert cleared.status_code == 200
+    assert client.get(f"/api/cases/{case_id}").json()["reminder_date"] is None
+
+
+def test_validate_accepts_pdf_and_passes_cloud_consent(monkeypatch):
+    from backend import main
+    from backend.gemma_client import ClaimExtraction, LineItem
+
+    received = {}
+
+    def fake_extract(content, mime_type, prompt, domain, allow_cloud_processing=False):
+        received.update(mime_type=mime_type, consent=allow_cloud_processing)
+        return ClaimExtraction(
+            provider_name="Example Hospital",
+            items=[LineItem(description="Consultation", amount=100, category="doctor_fee")],
+            total_extracted=100,
+            confidence_score=0.9,
+        ), False, "test_backend"
+
+    monkeypatch.setattr(main, "extract_form_data", fake_extract)
+    response = client.post(
+        "/api/validate",
+        data={"domain_mode": "health_insurance", "allow_cloud_processing": "true"},
+        files={"file": ("bill.pdf", b"%PDF-1.4 test", "application/pdf")},
+    )
+    assert response.status_code == 200
+    assert received == {"mime_type": "application/pdf", "consent": True}
+
+
+def test_pdf_rejects_invalid_signature():
+    response = client.post(
+        "/api/validate",
+        files={"file": ("bill.pdf", b"not really a PDF", "application/pdf")},
+    )
+    assert response.status_code == 400
+
+
+def test_scanned_pdf_requires_explicit_cloud_ocr_consent(monkeypatch):
+    from backend import gemma_client
+
+    monkeypatch.setattr(gemma_client, "_extract_text_from_pdf", lambda _: "")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    with pytest.raises(ValueError, match="appears scanned"):
+        gemma_client.extract_form_data(b"%PDF-1.4 scan", "application/pdf", "", "health_insurance")
+
+
+def test_api_token_protects_personal_data_routes(monkeypatch):
+    monkeypatch.setenv("CLAIMGUARD_API_TOKEN", "test-access-token")
+    assert client.get("/api/cases").status_code == 401
+    authorized = client.get("/api/cases", headers={"Authorization": "Bearer test-access-token"})
+    assert authorized.status_code == 200
+    assert client.get("/api/health").json()["authentication_required"] is True

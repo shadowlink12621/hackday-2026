@@ -29,7 +29,9 @@ def init_case_db() -> None:
                 patient_name TEXT NOT NULL,
                 patient_details_json TEXT NOT NULL,
                 created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                updated_at TEXT NOT NULL,
+                reminder_date TEXT,
+                reminder_confirmed_at TEXT
             )"""
         )
         conn.execute(
@@ -45,6 +47,11 @@ def init_case_db() -> None:
                 uploaded_at TEXT NOT NULL
             )"""
         )
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(cases)")}
+        if "reminder_date" not in columns:
+            conn.execute("ALTER TABLE cases ADD COLUMN reminder_date TEXT")
+        if "reminder_confirmed_at" not in columns:
+            conn.execute("ALTER TABLE cases ADD COLUMN reminder_confirmed_at TEXT")
 
 
 def _document_record(row: Any) -> dict[str, Any]:
@@ -90,7 +97,7 @@ def get_case(case_id: int) -> dict[str, Any] | None:
     init_case_db()
     with get_db_connection() as conn:
         row = conn.execute(
-            "SELECT id, patient_name, patient_details_json, created_at, updated_at FROM cases WHERE id = ?",
+            "SELECT id, patient_name, patient_details_json, created_at, updated_at, reminder_date, reminder_confirmed_at FROM cases WHERE id = ?",
             (case_id,),
         ).fetchone()
         if not row:
@@ -103,8 +110,21 @@ def get_case(case_id: int) -> dict[str, Any] | None:
     return {
         "case_id": row[0], "patient_name": row[1], "patient_details": json.loads(row[2]),
         "created_at": row[3], "updated_at": row[4],
+        "reminder_date": row[5], "reminder_confirmed_at": row[6],
         "documents": [_document_record(doc) for doc in documents],
     }
+
+
+@with_db_retry
+def save_case_reminder(case_id: int, reminder_date: str | None) -> bool:
+    init_case_db()
+    now = datetime.now(timezone.utc).isoformat()
+    with get_db_connection() as conn:
+        cursor = conn.execute(
+            "UPDATE cases SET reminder_date = ?, reminder_confirmed_at = ?, updated_at = ? WHERE id = ?",
+            (reminder_date, now if reminder_date else None, now, case_id),
+        )
+        return cursor.rowcount > 0
 
 
 @with_db_retry

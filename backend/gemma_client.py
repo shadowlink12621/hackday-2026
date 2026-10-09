@@ -1,6 +1,7 @@
 import base64
 import json
 import os
+import re
 import urllib.request
 import urllib.error
 from typing import Optional, List, Tuple
@@ -55,6 +56,10 @@ def _parse_json_response(response_text: str) -> dict:
     return value
 
 
+def _cloud_model_name() -> str:
+    return os.environ.get("GEMMA_MODEL") or "gemma-4-26b-a4b-it"
+
+
 def get_model_status() -> dict:
     """Checks and returns the status of Cloud Gemma, Local Ollama, and Offline Mock."""
     cloud_key = bool(os.environ.get("GEMINI_API_KEY"))
@@ -83,7 +88,7 @@ def get_model_status() -> dict:
 
     return {
         "cloud_gemma_available": bool(cloud_key and HAS_GENAI),
-        "cloud_model": os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it"),
+        "cloud_model": _cloud_model_name(),
         "local_ollama_online": local_ollama_online,
         "local_ollama_host": ollama_host,
         "local_models": local_models,
@@ -194,7 +199,7 @@ def extract_pdf_image_text(
         raise CloudModelError("Scanned PDF pages need an enabled Gemma connection and consent to cloud processing.")
 
     client = genai.Client(api_key=api_key)
-    model = os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it")
+    model = _cloud_model_name()
     page_text: dict[int, list[str]] = {}
     batch_size = 4
     for offset in range(0, len(images), batch_size):
@@ -325,7 +330,8 @@ def _parse_claim_from_text(text: str, domain_mode: str) -> Optional[ClaimExtract
 
 
 def extract_form_data(
-    file_bytes: bytes, mime_type: str, user_prompt: str, domain_mode: str
+    file_bytes: bytes, mime_type: str, user_prompt: str, domain_mode: str,
+    allow_cloud_processing: bool = False,
 ) -> Tuple[ClaimExtraction, bool, str]:
     """
     Multimodal extraction engine supporting:
@@ -389,10 +395,10 @@ def extract_form_data(
         raise CloudModelError("Gemma is configured, but the Google GenAI SDK is unavailable. Restart the backend after installing its requirements.")
 
     # Tier 2: Cloud Google GenAI (Gemma 4 multimodal extraction)
-    if not force_mock and HAS_GENAI and api_key and has_content and not use_local_llm:
+    if not force_mock and HAS_GENAI and api_key and has_content and not use_local_llm and allow_cloud_processing:
         try:
             client = genai.Client(api_key=api_key)
-            model_name = os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it")
+            model_name = _cloud_model_name()
 
             if pdf_images:
                 # OCR images in small labeled groups. This processes later pages
@@ -426,11 +432,9 @@ def extract_form_data(
             {{"provider_name":"vendor or hospital","patient_or_employee_name":null,"date_extracted":null,"currency":"INR","items":[{{"description":"item","amount":0.0,"category":"other"}}],"total_extracted":0.0,"confidence_score":0.0}}
             """
 
-            contents = []
-            if file_bytes:
-                contents.append(types.Part.from_bytes(data=file_bytes, mime_type=mime_type))
-            contents.append(prompt)
-
+            contents = [prompt]
+            if mime_type != "application/pdf" and file_bytes:
+                contents.insert(0, types.Part.from_bytes(data=file_bytes, mime_type=mime_type))
             response = client.models.generate_content(
                 model=model_name,
                 contents=contents,
@@ -496,7 +500,7 @@ def chat_with_claim(claim_json: str, user_question: str) -> str:
     if HAS_GENAI and api_key:
         try:
             client = genai.Client(api_key=api_key)
-            model = os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it")
+            model = _cloud_model_name()
             prompt = f"You are a helpful assistant analyzing a claim.\n\nCLAIM DATA:\n{claim_json}\n\nUSER QUESTION:\n{user_question}"
             response = client.models.generate_content(
                 model=model,
@@ -507,6 +511,65 @@ def chat_with_claim(claim_json: str, user_question: str) -> str:
         except Exception as e:
             return f"Error communicating with AI: {e}"
     return "No cloud model is configured. Claim chat is unavailable offline; use the deterministic validation results and source evidence shown in the claim."
+
+
+def verify_cloud_connection() -> dict:
+    """Make a small explicit request instead of treating key presence as connectivity."""
+    if not os.environ.get("GEMINI_API_KEY") or not HAS_GENAI:
+        return {"ok": False, "model": _cloud_model_name(), "detail": "GEMINI_API_KEY or the Google GenAI SDK is not configured."}
+    model = _cloud_model_name()
+    try:
+        client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        response = client.models.generate_content(
+            model=model,
+            contents="Reply with the single word READY.",
+            config=types.GenerateContentConfig(temperature=0),
+        )
+        if not (response.text or "").strip():
+            raise ValueError("The model returned an empty response.")
+        return {"ok": True, "model": model, "detail": "The cloud model returned a response."}
+    except Exception as exc:
+        return {"ok": False, "model": model, "detail": f"Cloud request failed ({type(exc).__name__}). Check key, model access, and network."}
+
+
+def _extractive_policy_answer(question: str, evidence_pages: list[dict]) -> dict:
+    stop_words = {"about", "after", "also", "and", "are", "can", "does", "for", "from", "have", "how", "into", "is", "may", "more", "not", "the", "this", "what", "when", "where", "which", "with", "policy", "insurance", "insured", "claim", "cover", "coverage", "please", "tell", "show"}
+    terms = {word for word in re.findall(r"[a-z0-9]+", question.lower()) if len(word) > 2 and word not in stop_words}
+    candidates = []
+    for page in evidence_pages:
+        text = str(page.get("text", "")).replace("\n", " ")
+        for sentence in re.split(r"(?<=[.!?;])\s+", text):
+            sentence = re.sub(r"\s+", " ", sentence).strip(" •-\t")
+            if len(sentence) < 24 or "[personal detail redacted]" in sentence.lower():
+                continue
+            normalized = re.sub(r"[^a-z0-9]+", " ", sentence.lower())
+            score = sum(bool(re.search(rf"\b{re.escape(term)}\b", normalized)) for term in terms)
+            if score:
+                candidates.append((score, page["page"], sentence[:420]))
+    candidates.sort(key=lambda item: (-item[0], item[1]))
+    chosen = []
+    seen = set()
+    for _, page_number, quote in candidates:
+        key = re.sub(r"\W+", " ", quote.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        chosen.append((page_number, quote))
+        if len(chosen) == 3:
+            break
+    if not chosen:
+        return {
+            "answer": "I couldn't find wording that answers this question in the indexed passages. Try a more specific question or open the cited policy pages.",
+            "citations": [],
+            "model_used": "retrieval_only",
+        }
+    answer = "Relevant policy wording found:\n\n" + "\n\n".join(f"{quote} [page {page}]" for page, quote in chosen)
+    answer += "\n\nThis is source text. The system has not inferred coverage or eligibility."
+    return {
+        "answer": answer,
+        "citations": [{"page": page, "excerpt": quote} for page, quote in chosen],
+        "model_used": "retrieval_only",
+    }
 
 
 def answer_with_policy(
@@ -542,7 +605,7 @@ USER QUESTION:
     if HAS_GENAI and api_key and allow_cloud_processing and not use_local:
         try:
             client = genai.Client(api_key=api_key)
-            model = os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it")
+            model = _cloud_model_name()
             response = client.models.generate_content(
                 model=model,
                 contents=prompt,
@@ -575,11 +638,7 @@ USER QUESTION:
         except Exception:
             pass
 
-    return {
-        "answer": "No model-generated answer was used. These are the most relevant policy excerpts for manual review; the system has not inferred coverage or eligibility.",
-        "citations": citations,
-        "model_used": "retrieval_only",
-    }
+    return _extractive_policy_answer(question, evidence_pages)
 
 
 def summarize_policy_pages(pages: list[dict], allow_cloud_processing: bool = False) -> dict:

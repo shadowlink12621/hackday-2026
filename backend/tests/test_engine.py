@@ -223,7 +223,7 @@ def test_api_file_upload_validation_limits():
         data={"domain_mode": "expense"},
     )
     assert res_mime.status_code == 400
-    assert "Only JPEG, PNG, and searchable PDF files are supported" in res_mime.json()["detail"]
+    assert "PDF, JPEG, or PNG" in res_mime.json()["detail"]
 
 
 def test_unsupported_currency_flagged():
