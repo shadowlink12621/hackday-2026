@@ -225,6 +225,69 @@ def test_api_file_upload_validation_limits():
     assert "JPEG and PNG" in res_mime.json()["detail"]
 
 
+def test_unsupported_currency_flagged():
+    mock_data = ClaimExtraction(
+        provider_name="Tokyo Shop",
+        patient_or_employee_name="Kenji",
+        date_extracted="2026-10-09",
+        currency="XYZ",
+        items=[LineItem(description="Item", amount=100.0)],
+        total_extracted=100.0,
+        confidence_score=0.9,
+    )
+    result = run_deterministic_checks(mock_data, b"test_unsupported_curr", "{}", "expense")
+    assert result.is_valid is False
+    assert any(
+        r.rule_name == "Currency Verification" and r.passed is False
+        for r in result.results
+    )
+
+
+def test_api_validate_missing_file_and_invalid_domain():
+    # Missing file
+    res_no_file = client.post("/api/validate", data={"domain_mode": "expense"})
+    assert res_no_file.status_code == 400
+    assert "required" in res_no_file.json()["detail"].lower()
+
+    # Invalid domain mode
+    dummy_img = (b"fake_valid_png_header", "receipt.png", "image/png")
+    res_bad_domain = client.post(
+        "/api/validate",
+        files={"file": ("receipt.png", b"valid_bytes_test", "image/png")},
+        data={"domain_mode": "invalid_domain"},
+    )
+    assert res_bad_domain.status_code == 400
+    assert "domain_mode" in res_bad_domain.json()["detail"].lower()
+
+    # Invalid rule settings JSON
+    res_bad_settings = client.post(
+        "/api/validate",
+        files={"file": ("receipt.png", b"valid_bytes_test", "image/png")},
+        data={"domain_mode": "expense", "rule_settings": "{bad_json}"},
+    )
+    assert res_bad_settings.status_code == 400
+    assert "rule_settings" in res_bad_settings.json()["detail"].lower()
+
+
+def test_csv_export_sanitizes_formula_injection():
+    mock_data = ClaimExtraction(
+        provider_name="=CMD|' /C calc'!A0",
+        patient_or_employee_name="Hacker",
+        date_extracted="2026-10-09",
+        currency="INR",
+        items=[LineItem(description="Hack", amount=100.0)],
+        total_extracted=100.0,
+        confidence_score=0.9,
+    )
+    val_result = ValidationResult(is_valid=False, final_amount_inr=100.0, results=[])
+    save_claim("expense", mock_data, val_result)
+
+    res = client.get("/api/export.csv")
+    assert res.status_code == 200
+    # Formula prefix '=' must be sanitized with single quote "'"
+    assert "'=CMD|" in res.text
+
+
 def test_db_operational_error_retry():
     call_count = {"count": 0}
 

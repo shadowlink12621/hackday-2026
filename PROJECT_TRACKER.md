@@ -12,15 +12,16 @@ This is the shared progress board. Check `origin/master`, `git status -sb`, and 
 - [x] Persist claims in SQLite and expose claims, decision, and CSV APIs.
 - [x] Create the Agent Skill and baseline engine tests.
 - [x] Align the backend contract on `POST /api/validate` with `perception` and `validation`.
-- [ ] Keep model configuration and fallback behavior working during final integration.
+- [x] Keep model configuration and fallback behavior working during final integration.
 
 ### A2: Codex Lane - Backend Hardening and Verification
 
 - [x] Add a 5 MB request limit and JPEG/PNG MIME validation to `POST /api/validate`.
-- [ ] Add recovery for temporary SQLite locking during concurrent requests.
-- [ ] Add endpoint smoke tests for health, claims list, CSV export, and manager decisions.
-- [ ] Run the complete backend verification flow with fallback mode.
+- [x] Add recovery for temporary SQLite locking during concurrent requests.
+- [x] Add endpoint smoke tests for health, claims list, CSV export, and manager decisions.
+- [x] Run the complete backend verification flow with fallback mode.
 - [ ] Integrate Person B's completed frontend only after it is merged to `master`.
+
 
 ## Person B: Frontend, Browser Testing, Deployment
 

@@ -5,7 +5,7 @@ import os
 import sqlite3
 import time
 from contextlib import contextmanager
-from typing import Any, List
+from typing import Any, List, Optional
 from pydantic import BaseModel
 
 DB_FILE = os.environ.get("CLAIMGUARD_DB_FILE", "claimguard.db")
@@ -86,11 +86,12 @@ class ValidationResult(BaseModel):
     results: List[RuleResult]
 
 
-def get_exchange_rate(currency: str, custom_rates: dict[str, float] | None = None) -> float:
+def get_exchange_rate(currency: str, custom_rates: dict[str, float] | None = None) -> Optional[float]:
     rates = {"USD": 83.5, "EUR": 90.0, "INR": 1.0, "GBP": 105.0}
     if custom_rates and isinstance(custom_rates, dict):
         rates.update({k.upper(): float(v) for k, v in custom_rates.items()})
-    return rates.get(currency.upper(), 1.0)
+    return rates.get(currency.upper(), None)
+
 
 
 
@@ -226,7 +227,29 @@ def run_deterministic_checks(
 
     # 3. Domain Specific Logic
     exchange_rate = get_exchange_rate(extracted_data.currency, custom_exchange_rates)
-    final_amount_inr = calculated_total * exchange_rate
+    if exchange_rate is None:
+        results.append(
+            RuleResult(
+                rule_name="Currency Verification",
+                passed=False,
+                message=(
+                    f"Unsupported currency '{extracted_data.currency}'. Supported currencies: "
+                    "INR, USD, EUR, GBP. Manual exchange rate review required."
+                ),
+            )
+        )
+        final_amount_inr = calculated_total
+        effective_rate = 1.0
+    else:
+        results.append(
+            RuleResult(
+                rule_name="Currency Verification",
+                passed=True,
+                message=f"Recognized currency {extracted_data.currency} (conversion rate: {exchange_rate}).",
+            )
+        )
+        final_amount_inr = calculated_total * exchange_rate
+        effective_rate = exchange_rate
 
     if domain_mode == "health_insurance":
         room_rent_cap_inr = float(settings.get("room_rent_cap_inr", 10000.0))
@@ -234,7 +257,7 @@ def run_deterministic_checks(
 
         room_rent_items = [item for item in extracted_data.items if item.category == "room_rent"]
         if room_rent_items:
-            room_total = sum(i.amount for i in room_rent_items) * exchange_rate
+            room_total = sum(i.amount for i in room_rent_items) * effective_rate
             if room_total > room_rent_cap_inr:
                 results.append(
                     RuleResult(
@@ -288,6 +311,7 @@ def run_deterministic_checks(
                     message=f"{msg} EXCEEDS policy limit of ₹{policy_limit_inr}!",
                 )
             )
+
 
     is_valid = all(r.passed for r in results)
 
