@@ -26,7 +26,7 @@ This is the unified project tracking board for the ClaimGuard team.
 - [x] Standardize upload contract on `POST /api/validate` returning `perception` and `validation`.
 
 ### Stage 3: Hardening and Edge Cases
-- [x] Reject files over 5 MB and unsupported MIME types at the validation endpoint.
+- [x] Enforce bounded PDF (20 MB), JPEG/PNG (5 MB), and MIME/signature checks at validation.
 - [x] Handle transient SQLite lock errors with WAL mode and retry decorator.
 - [x] Test health, validation, claims, decisions, CSV export, and lock retry behavior (21/21 tests passing).
 - [x] Clean up backend code and verify fallback behavior.
@@ -35,7 +35,7 @@ This is the unified project tracking board for the ClaimGuard team.
 - [x] **Local Insurer Knowledge Base**: Build markdown knowledge base (`backend/knowledge/`) for HDFC ERGO, Star Health, Niva Bupa, Care Health, ICICI Lombard, and SBI General with real-world claim repudiation traps (lifestyle/smoking disclosures, room rent proportional deductions, 15-bed minimums, consumables exclusions).
 - [x] **Benefit & Deadline Calendar Engine**: Generate RFC 5545 `.ics` reminders (`GET /api/claims/{id}/calendar.ics`); generic intervals are now labeled provisional, not statutory or policy deadlines.
 - [x] **ScamCheck Engine**: Analyze SMS, email, and WhatsApp messages for insurance refund fee extortion (`POST /api/scamcheck`) referencing IRDAI Bima Bharosa warnings.
-- [x] **Hybrid Gemma Architecture**: Support Cloud Gemma 4, Local Ollama open-source Gemma (`http://localhost:11434`), and offline structured mock fallback with `GET /api/model/status`.
+- [x] **Hybrid model architecture**: Support Google GenAI, optional Local Ollama (`http://localhost:11434`), and honest offline source retrieval with `GET /api/model/status`.
 - [x] **Interactive Claim Chat**: Add `POST /api/chat` to allow conversational Q&A with Gemma about specific audited claims.
 - [x] **Developer Scripts**:
   - `backend/scripts/seed_demo_claims.py`: Idempotent seeder with 4 realistic claims.
@@ -58,8 +58,12 @@ This is the unified project tracking board for the ClaimGuard team.
 - [x] Verify no-model claim uploads cannot be marked approved; backend suite currently 33 passing.
 - [ ] Configure a real API key locally and verify a live model request; no key is currently configured.
 - [x] Replace in-progress sample policy/patient/chat UI with empty states, case selection, API-backed policy/documents, source citations, runtime status, and cloud-consent controls.
-- [x] Remove canned scam/policy fallback answers and remove PDF acceptance from the image-only claim control.
-- [ ] Implement medical-record AI interpretation, OCR, robust policy-holder/member identity extraction, server-persisted reminders, and auth before public deployment with personal data.
+- [x] Remove canned scam/policy fallback answers; support PDF/JPEG/PNG claim documents with per-format limits and explicit cloud consent.
+- [x] Add opt-in cloud OCR for scanned claim PDFs; searchable claim PDFs use local extraction with mandatory human-review flag.
+- [x] Persist a user-confirmed reminder date on its patient case; never calculate an unverified deadline.
+- [x] Add optional shared-token API auth and a browser token gate; production mode fails closed if the token is missing.
+- [ ] Add cited, consent-based medical-record interpretation and robust insured-member identity extraction; not included in this merge because extracted health identity must be handled locally or under clear consent.
+- [ ] Configure a real API key and verify live model response; no key is present in the local environment.
 
 ---
 
@@ -81,8 +85,8 @@ This is the unified project tracking board for the ClaimGuard team.
 - [x] Configure Playwright to run the frontend locally in Chromium.
 - [x] Test an approved corporate expense and a flagged health insurance claim with mocked API responses.
 - [x] Test CSV download and display of backend validation errors.
-- [x] Run Playwright flows successfully.
-- [x] Add case/policy/chat flow browser test; latest serial Playwright run passed 5/5.
+- [x] Run the focused case/policy/chat browser flow successfully after integration.
+- [ ] Rerun all Playwright cases; the constrained Windows runner crashed Chromium workers for memory, though the focused case/policy test passed.
 
 ### Stage 4: Local Docker Deployment
 - [x] Add multi-stage frontend Dockerfile (Vite build + static server on port 5173).
@@ -94,7 +98,7 @@ This is the unified project tracking board for the ClaimGuard team.
 - [x] Build API-backed patient registration and per-case local document storage.
 - [x] Replace placeholder policy facts and chat answers with uploaded-policy evidence, cited chat, and explicit cloud consent.
 - [x] Remove static scam examples and canned fallback verdicts.
-- [x] Add user-confirmed date and local `.ics` export without assuming a statutory/policy deadline.
+- [x] Add case-persisted user-confirmed date and `.ics` export without assuming a statutory/policy deadline.
 - [ ] Merge these UI changes from `feat/core-ai` into `feat/frontend` so Person B can continue demo polish.
 
 ---

@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 
 export default function UploadZone({ 
   domainMode, setDomainMode, file, previewUrl, 
-  loading, handleFileChange, handleAnalyze, setFile, setPreviewUrl, setResult, setError
+  loading, handleFileChange, handleAnalyze, allowCloudProcessing, setAllowCloudProcessing,
 }) {
   const fileInputRef = useRef(null);
 
@@ -20,13 +20,11 @@ export default function UploadZone({
     e.preventDefault();
     e.currentTarget.classList.remove('dragover');
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const dropped = e.dataTransfer.files[0];
-      setFile(dropped);
-      setPreviewUrl(URL.createObjectURL(dropped));
-      setResult(null);
-      setError(null);
+      handleFileChange({ target: { files: e.dataTransfer.files } });
     }
   };
+
+  const isPdf = file && (file.type === 'application/pdf' || file.name?.toLowerCase().endsWith('.pdf'));
 
   return (
     <section className="card intake-card">
@@ -61,22 +59,37 @@ export default function UploadZone({
           type="file" 
           ref={fileInputRef} 
           onChange={handleFileChange} 
-          accept="image/jpeg,image/png,.jpg,.jpeg,.png"
+          accept="application/pdf,.pdf,image/jpeg,image/png,.jpg,.jpeg,.png"
+          style={{ display: 'none' }}
         />
         
-        {previewUrl ? (
+        {isPdf ? (
+          <div style={{ textAlign: 'center', padding: '16px' }}>
+            <div style={{ fontSize: '48px', marginBottom: '8px' }}>📄</div>
+            <strong style={{ color: '#38bdf8', wordBreak: 'break-word' }}>{file.name}</strong>
+            <div style={{ color: '#94a3b8', fontSize: '12px', marginTop: '4px' }}>
+              PDF · {(file.size / 1024).toFixed(0)} KB
+            </div>
+          </div>
+        ) : previewUrl ? (
           <img src={previewUrl} alt="Receipt Preview" className="preview-image" />
         ) : (
           <>
             <div className="upload-icon upload-symbol">↑</div>
             <strong>Drag and drop file here</strong>
-            <span>JPEG or PNG up to 5 MB</span>
+            <span>PDF up to 20 MB · JPEG/PNG up to 5 MB</span>
           </>
         )}
       </div>
+
+      <label className="consent-line upload-cloud-consent">
+        <input type="checkbox" checked={allowCloudProcessing} onChange={(event) => setAllowCloudProcessing(event.target.checked)} />
+        I consent to send this document to the configured cloud AI provider for extraction. Leave unchecked for local/offline processing.
+      </label>
       
       <button 
         className="primary-button" 
+        id="process-claim-btn"
         onClick={handleAnalyze} 
         disabled={!file || loading}
       >

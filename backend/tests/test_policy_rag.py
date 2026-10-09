@@ -64,6 +64,14 @@ def test_policy_chat_offline_returns_source_excerpts(monkeypatch):
     assert result["model_used"] == "retrieval_only"
     assert "not inferred coverage" in result["answer"]
     assert result["citations"][0]["page"] == 9
+    assert "12 months" in result["answer"]
+
+
+def test_model_connection_check_reports_missing_credentials(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    response = client.post("/api/model/check")
+    assert response.status_code == 503
+    assert "GEMINI_API_KEY" in response.json()["detail"]
 
 
 def test_cloud_policy_chat_requires_explicit_consent_and_respects_zero_env(monkeypatch):

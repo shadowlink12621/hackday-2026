@@ -1,5 +1,6 @@
 import csv
 from datetime import datetime, timezone
+import hmac
 from io import StringIO
 import json
 import os
@@ -24,7 +25,7 @@ from .engine import (
 from .gemma_client import extract_form_data, get_model_status, chat_with_claim
 from .knowledge_loader import get_insurer_knowledge, list_known_insurers
 from .policy_store import MAX_POLICY_PDF_BYTES, get_policy, get_policy_pages, ingest_policy_pdf, retrieve_policy_pages
-from .gemma_client import answer_with_policy, summarize_policy_pages
+from .gemma_client import answer_with_policy, summarize_policy_pages, verify_cloud_connection
 from .case_store import (
     ALLOWED_DOCUMENT_TYPES,
     DOCUMENT_CATEGORIES,
@@ -34,16 +35,33 @@ from .case_store import (
     get_case_document_path,
     list_cases,
     save_case_document,
+    save_case_reminder,
 )
 
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png"}
+ALLOWED_VALIDATION_TYPES = ALLOWED_IMAGE_TYPES | {"application/pdf"}
 ALLOWED_DOMAINS = {"expense", "health_insurance"}
 
 app = FastAPI(title="ClaimGuard Enterprise API")
 
 cors_origins_env = os.environ.get("CORS_ORIGINS", "*")
 origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()] if cors_origins_env != "*" else ["*"]
+
+@app.middleware("http")
+async def require_configured_api_token(request: Request, call_next):
+    if request.method == "OPTIONS" or request.url.path == "/api/health":
+        return await call_next(request)
+    token = os.environ.get("CLAIMGUARD_API_TOKEN")
+    if not token and os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}:
+        return JSONResponse(status_code=503, content={"detail": "Set CLAIMGUARD_API_TOKEN before running in production."})
+    if token:
+        supplied = request.headers.get("authorization", "")
+        expected = f"Bearer {token}"
+        if not hmac.compare_digest(supplied, expected):
+            return JSONResponse(status_code=401, content={"detail": "Authentication required. Enter the workspace access token."})
+    return await call_next(request)
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -72,7 +90,12 @@ async def handle_sqlite_operational_error(request: Request, exc: sqlite3.Operati
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "ok", "service": "ClaimGuard Validation Engine"}
+    production = os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}
+    return {
+        "status": "ok",
+        "service": "ClaimGuard Validation Engine",
+        "authentication_required": bool(os.environ.get("CLAIMGUARD_API_TOKEN")) or production,
+    }
 
 
 @app.get("/api/model/status")
@@ -81,27 +104,39 @@ def model_status():
     return get_model_status()
 
 
+@app.post("/api/model/check")
+async def check_model_connection():
+    result = await run_in_threadpool(verify_cloud_connection)
+    if not result["ok"]:
+        raise HTTPException(status_code=503, detail=result["detail"])
+    return result
+
+
 @app.post("/api/validate")
 async def process_request(
     prompt: Optional[str] = Form(""),
     file: Optional[UploadFile] = File(None),
     domain_mode: str = Form("expense"),
     rule_settings: str = Form("{}"),
+    allow_cloud_processing: bool = Form(False),
 ):
     start_time = time.time()
 
     if not file or not file.filename:
-        raise HTTPException(status_code=400, detail="An image file is required for document validation.")
-
-    contents = await file.read()
-    if not contents or len(contents) == 0:
-        raise HTTPException(status_code=400, detail="Uploaded file cannot be empty.")
+        raise HTTPException(status_code=400, detail="A receipt, bill, or invoice file is required.")
 
     mime_type = file.content_type or "application/octet-stream"
-    if mime_type not in ALLOWED_IMAGE_TYPES:
-        raise HTTPException(status_code=400, detail="Only JPEG and PNG images are supported.")
-    if len(contents) > MAX_FILE_SIZE_BYTES:
-        raise HTTPException(status_code=400, detail="File size must be 5 MB or less.")
+    if mime_type not in ALLOWED_VALIDATION_TYPES:
+        raise HTTPException(status_code=400, detail="Upload a PDF, JPEG, or PNG document.")
+    is_pdf = mime_type == "application/pdf"
+    size_limit = MAX_POLICY_PDF_BYTES if is_pdf else MAX_FILE_SIZE_BYTES
+    contents = await file.read(size_limit + 1)
+    if not contents:
+        raise HTTPException(status_code=400, detail="Uploaded file cannot be empty.")
+    if len(contents) > size_limit:
+        raise HTTPException(status_code=400, detail=f"File size must be {size_limit // (1024 * 1024)} MB or less.")
+    if is_pdf and not contents.startswith(b"%PDF"):
+        raise HTTPException(status_code=400, detail="The uploaded file is not a valid PDF.")
 
     if domain_mode not in ALLOWED_DOMAINS:
         raise HTTPException(
@@ -120,10 +155,21 @@ async def process_request(
                 detail="Invalid rule_settings: must be a valid JSON object string.",
             )
 
-    extracted_data, is_mock, model_source = await run_in_threadpool(
-        extract_form_data, contents, mime_type, prompt or "", domain_mode
-    )
+    try:
+        extracted_data, is_mock, model_source = await run_in_threadpool(
+            extract_form_data, contents, mime_type, prompt or "", domain_mode,
+            allow_cloud_processing=allow_cloud_processing,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     validation_result = run_deterministic_checks(extracted_data, contents, rule_settings, domain_mode)
+    if model_source == "local_pdf_document_extractor":
+        validation_result.results.append(RuleResult(
+            rule_name="Manual evidence review required",
+            passed=False,
+            message="PDF text was parsed with deterministic heuristics. Verify every extracted amount and provider against the source before approval.",
+        ))
+        validation_result.is_valid = False
     if is_mock and extracted_data.confidence_score == 0:
         validation_result.results.append(RuleResult(
             rule_name="Model extraction unavailable",
@@ -233,6 +279,22 @@ class PolicyQuestion(BaseModel):
 
 class PolicySummaryRequest(BaseModel):
     allow_cloud_processing: bool = False
+
+
+class ReminderRequest(BaseModel):
+    confirmed_date: Optional[str] = None
+
+
+@app.post("/api/cases/{case_id}/reminder")
+def save_reminder(case_id: int, payload: ReminderRequest):
+    if payload.confirmed_date:
+        try:
+            datetime.strptime(payload.confirmed_date, "%Y-%m-%d")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Reminder date must use YYYY-MM-DD format.") from exc
+    if not save_case_reminder(case_id, payload.confirmed_date):
+        raise HTTPException(status_code=404, detail=f"Case {case_id} not found.")
+    return {"case_id": case_id, "confirmed_date": payload.confirmed_date}
 
 
 @app.post("/api/policies/{policy_id}/chat")

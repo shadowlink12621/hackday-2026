@@ -130,24 +130,14 @@ test('exports the audit CSV as a browser download', async ({ page }) => {
   expect(download.suggestedFilename()).toBe('audit_report.csv');
 });
 
-test('shows a backend validation error for an oversized upload', async ({ page }) => {
+test('rejects unsupported uploads before sending them to the backend', async ({ page }) => {
   await mockBackend(page);
-  await page.route('http://localhost:8000/api/validate', (route) =>
-    route.fulfill({
-      status: 400,
-      contentType: 'application/json',
-      json: { detail: 'File exceeds the 5 MB upload limit.' },
-    }),
-  );
   await page.goto('/');
   await page.locator('input[type="file"]').setInputFiles({
-    name: 'oversized-receipt.png',
-    mimeType: 'image/png',
-    buffer: Buffer.alloc(6 * 1024 * 1024),
+    name: 'unsupported.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('not a supported claim document'),
   });
-
-  await page.getByRole('button', { name: 'Process Claim' }).click();
-
-  await expect(page.getByText('Connection Error')).toBeVisible();
-  await expect(page.getByText('File exceeds the 5 MB upload limit.')).toBeVisible();
+  await expect(page.getByText('Upload a PDF, JPEG, or PNG document.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Process Claim' })).toBeDisabled();
 });

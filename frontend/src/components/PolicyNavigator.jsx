@@ -1,13 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   askPolicy,
+  checkModelConnection,
   createCase,
+  downloadCaseDocument,
   getCase,
   getCaseDocumentUrl,
   getCases,
   getModelStatus,
   getPolicy,
   generatePolicySummary,
+  saveCaseReminder,
   uploadCaseDocument,
 } from '../api';
 
@@ -46,6 +49,7 @@ export default function PolicyNavigator() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [modelCheck, setModelCheck] = useState(null);
 
   const policyDocument = useMemo(
     () => caseData?.documents?.find((document) => document.category === 'policy' && document.policy_id),
@@ -58,8 +62,8 @@ export default function PolicyNavigator() {
     setCaseData(record);
     setCases(list);
     setSelectedId(String(record.case_id));
-    setReminderDate(localStorage.getItem(`claimguard-reminder-${record.case_id}`) || '');
-    setReminderConfirmed(localStorage.getItem(`claimguard-reminder-confirmed-${record.case_id}`) === 'true');
+    setReminderDate(record.reminder_date || '');
+    setReminderConfirmed(Boolean(record.reminder_date && record.reminder_confirmed_at));
     const linkedPolicy = [...record.documents].reverse().find((doc) => doc.category === 'policy' && doc.policy_id);
     if (linkedPolicy) setPolicyData(await getPolicy(linkedPolicy.policy_id));
     else setPolicyData(null);
@@ -201,18 +205,58 @@ export default function PolicyNavigator() {
     }
   };
 
-  const saveReminderDate = (value) => {
+  const saveReminderDate = async (value) => {
     setReminderDate(value);
     setReminderConfirmed(false);
-    if (caseData) {
-      localStorage.setItem(`claimguard-reminder-${caseData.case_id}`, value);
-      localStorage.removeItem(`claimguard-reminder-confirmed-${caseData.case_id}`);
+    if (caseData?.reminder_date) {
+      try {
+        await saveCaseReminder(caseData.case_id, null);
+        setCaseData((current) => current ? { ...current, reminder_date: null, reminder_confirmed_at: null } : current);
+      } catch (err) {
+        setError(err.message);
+      }
     }
   };
 
-  const confirmReminderDate = (checked) => {
+  const confirmReminderDate = async (checked) => {
     setReminderConfirmed(checked);
-    if (caseData) localStorage.setItem(`claimguard-reminder-confirmed-${caseData.case_id}`, String(checked));
+    if (!caseData) return;
+    try {
+      await saveCaseReminder(caseData.case_id, checked ? reminderDate : null);
+      setNotice(checked ? 'Confirmed reminder saved to this case.' : 'Saved reminder cleared.');
+      await refreshCase(caseData.case_id);
+    } catch (err) {
+      setReminderConfirmed(false);
+      setError(err.message);
+    }
+  };
+
+  const handleModelCheck = async () => {
+    setModelCheck({ loading: true, detail: 'Checking cloud model connectivity…' });
+    try {
+      setModelCheck(await checkModelConnection());
+    } catch (err) {
+      setModelCheck({ ok: false, detail: err.message });
+    }
+  };
+
+  const openCaseDocument = async (event, caseId, documentId, page) => {
+    event.preventDefault();
+    const preview = window.open('about:blank', '_blank');
+    try {
+      const blob = await downloadCaseDocument(caseId, documentId);
+      const url = URL.createObjectURL(blob);
+      if (preview) {
+        preview.opener = null;
+        preview.location.href = `${url}${page ? `#page=${page}` : ''}`;
+      } else {
+        window.location.href = url;
+      }
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      preview?.close();
+      setError(err.message);
+    }
   };
 
   const selectStep = (id) => {
@@ -329,7 +373,7 @@ export default function PolicyNavigator() {
             </select></label>
             <label className="file-action">Add document<input type="file" accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png" onChange={(event) => handleUpload(event, category)} disabled={busy} /></label>
           </div>
-          <DocumentList documents={caseData.documents} caseId={caseData.case_id} />
+          <DocumentList documents={caseData.documents} caseId={caseData.case_id} onOpen={openCaseDocument} />
         </section>
       )}
 
@@ -355,6 +399,12 @@ export default function PolicyNavigator() {
                   Generate cited policy outline
                 </button>
               )}
+              <div className="model-connection-check">
+                <button type="button" className="secondary-button" onClick={handleModelCheck} disabled={modelCheck?.loading}>
+                  {modelCheck?.loading ? 'Checking…' : 'Test AI connection'}
+                </button>
+                {modelCheck && <p className={modelCheck.ok ? 'connection-ok' : 'connection-failed'} role="status">{modelCheck.ok ? `Connected · ${modelCheck.model}` : modelCheck.detail}</p>}
+              </div>
               <p className="muted-copy">Only indexed passages are shown below. A missing topic means it was not found by retrieval, not that the policy has no such term.</p>
               {generatedSummary && <GeneratedSummary result={generatedSummary} />}
             </section>
@@ -364,7 +414,7 @@ export default function PolicyNavigator() {
                   <div className="fact-heading"><h3>{fact.topic}</h3><span className={fact.status === 'conflict_review' ? 'status-pill pill-review' : 'status-pill pill-pending'}>{fact.status === 'conflict_review' ? 'Verify source' : 'Source found'}</span></div>
                   {fact.pages.map((page, index) => (
                     <div className="source-excerpt" key={`${fact.topic}-${page}-${index}`}>
-                      <a href={`${getCaseDocumentUrl(caseData.case_id, policyDocument.document_id)}#page=${page}`} target="_blank" rel="noreferrer">PDF page {page}</a>
+                      <a href={`${getCaseDocumentUrl(caseData.case_id, policyDocument.document_id)}#page=${page}`} onClick={(event) => openCaseDocument(event, caseData.case_id, policyDocument.document_id, page)}>PDF page {page}</a>
                       <p>{fact.evidence[index]}</p>
                     </div>
                   ))}
@@ -455,14 +505,14 @@ function downloadCaseReminder(patientName, date) {
   URL.revokeObjectURL(url);
 }
 
-function DocumentList({ documents = [], caseId }) {
+function DocumentList({ documents = [], caseId, onOpen }) {
   if (!documents.length) return <p className="muted-copy">No supporting documents added to this case.</p>;
   return (
     <ul className="document-list">
       {documents.map((document) => (
         <li key={document.document_id}>
           <span><strong>{document.filename}</strong><small>{document.category.replaceAll('_', ' ')} · {(document.size_bytes / 1024).toFixed(0)} KB</small></span>
-          <a href={getCaseDocumentUrl(caseId, document.document_id)} target="_blank" rel="noreferrer">Open</a>
+          <a href={getCaseDocumentUrl(caseId, document.document_id)} onClick={(event) => onOpen(event, caseId, document.document_id)}>Open</a>
         </li>
       ))}
     </ul>

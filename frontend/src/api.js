@@ -2,7 +2,10 @@ const API_ORIGIN = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 const API = `${API_ORIGIN}/api`;
 
 async function request(path, options = {}) {
-  const response = await fetch(`${API}${path}`, options);
+  const token = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('claimguard_access_token') : '';
+  const headers = new Headers(options.headers || {});
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  const response = await fetch(`${API}${path}`, { ...options, headers });
   if (!response.ok) {
     let message = `Request failed (${response.status})`;
     try {
@@ -16,7 +19,7 @@ async function request(path, options = {}) {
   return response;
 }
 
-export async function processDocument(file, domainMode) {
+export async function processDocument(file, domainMode, allowCloudProcessing = false) {
   const healthMode = domainMode === 'health_insurance';
   const form = new FormData();
   form.append('file', file);
@@ -25,6 +28,7 @@ export async function processDocument(file, domainMode) {
     ? 'Extract the Indian health insurance claim details, itemized amounts, patient and provider information, and relevant dates. Return the requested structured claim data.'
     : 'Extract the corporate expense receipt details, itemized amounts, employee and merchant information, and relevant dates. Return the requested structured claim data.');
   form.append('rule_settings', '{}');
+  form.append('allow_cloud_processing', String(allowCloudProcessing));
   const response = await request('/validate', { method: 'POST', body: form });
   return response.json();
 }
@@ -86,6 +90,11 @@ export async function getModelStatus() {
   return response.json();
 }
 
+export async function checkModelConnection() {
+  const response = await request('/model/check', { method: 'POST' });
+  return response.json();
+}
+
 export async function getCases() {
   const response = await request('/cases');
   return response.json();
@@ -102,6 +111,15 @@ export async function createCase(patient) {
 
 export async function getCase(caseId) {
   const response = await request(`/cases/${encodeURIComponent(caseId)}`);
+  return response.json();
+}
+
+export async function saveCaseReminder(caseId, confirmedDate) {
+  const response = await request(`/cases/${encodeURIComponent(caseId)}/reminder`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirmed_date: confirmedDate || null }),
+  });
   return response.json();
 }
 
@@ -141,6 +159,11 @@ export async function generatePolicySummary(policyId, allowCloudProcessing = fal
 
 export function getCaseDocumentUrl(caseId, documentId) {
   return `${API}/cases/${encodeURIComponent(caseId)}/documents/${encodeURIComponent(documentId)}/download`;
+}
+
+export async function downloadCaseDocument(caseId, documentId) {
+  const response = await request(`/cases/${encodeURIComponent(caseId)}/documents/${encodeURIComponent(documentId)}/download`);
+  return response.blob();
 }
 
 export function getCalendarIcsUrl(claimId) {

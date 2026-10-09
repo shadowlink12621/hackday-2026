@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { processDocument, getClaims, saveDecision, getAuditCsv } from './api';
+import { processDocument, getClaims, getHealth, getModelStatus, saveDecision, getAuditCsv } from './api';
 import './index.css';
 
 import Header from './components/Header';
@@ -8,7 +8,6 @@ import ResultsDashboard from './components/ResultsDashboard';
 import HistoryTable from './components/HistoryTable';
 import ErrorBoundary from './components/ErrorBoundary';
 import PolicyNavigator from './components/PolicyNavigator';
-import ScamCheckTab from './components/ScamCheckTab';
 
 function App() {
   const [activeTab, setActiveTab] = useState('claims');
@@ -19,6 +18,13 @@ function App() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [claimsHistory, setClaimsHistory] = useState([]);
+  const [modelStatus, setModelStatus] = useState(null);
+  const [authResolved, setAuthResolved] = useState(false);
+  const [authRequired, setAuthRequired] = useState(false);
+  const [authorized, setAuthorized] = useState(false);
+  const [accessToken, setAccessToken] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [allowCloudProcessing, setAllowCloudProcessing] = useState(false);
 
   const loadHistory = async () => {
     try {
@@ -29,15 +35,72 @@ function App() {
     }
   };
 
+  const loadModelStatus = async () => {
+    try {
+      setModelStatus(await getModelStatus());
+    } catch {
+      setModelStatus(null);
+    }
+  };
+
   useEffect(() => {
-    loadHistory();
+    getHealth().then(async (health) => {
+      const requiresAuth = Boolean(health.authentication_required);
+      setAuthRequired(requiresAuth);
+      const savedToken = sessionStorage.getItem('claimguard_access_token') || '';
+      if (!requiresAuth) {
+        setAuthorized(true);
+        await loadHistory();
+        await loadModelStatus();
+      } else if (savedToken) {
+        try {
+          setClaimsHistory(await getClaims());
+          setAuthorized(true);
+          await loadModelStatus();
+        } catch {
+          sessionStorage.removeItem('claimguard_access_token');
+        }
+      }
+      setAuthResolved(true);
+    }).catch((err) => {
+      setAuthError(err.message || 'Could not reach the ClaimGuard API.');
+      setAuthResolved(true);
+    });
   }, []);
+
+  const handleAuthorize = async (event) => {
+    event.preventDefault();
+    sessionStorage.setItem('claimguard_access_token', accessToken.trim());
+    try {
+      setClaimsHistory(await getClaims());
+      setAuthorized(true);
+      await loadModelStatus();
+      setAuthError('');
+    } catch (err) {
+      sessionStorage.removeItem('claimguard_access_token');
+      setAuthError(err.message);
+    }
+  };
 
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
     if (selected) {
+      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+      const maxBytes = selected.type === 'application/pdf' ? 20 * 1024 * 1024 : 5 * 1024 * 1024;
+      if (!allowedTypes.includes(selected.type) || selected.size > maxBytes) {
+        setError(!allowedTypes.includes(selected.type) ? 'Upload a PDF, JPEG, or PNG document.' : `File is larger than ${selected.type === 'application/pdf' ? '20' : '5'} MB.`);
+        setFile(null);
+        setPreviewUrl(null);
+        setResult(null);
+        return;
+      }
       setFile(selected);
-      setPreviewUrl(URL.createObjectURL(selected));
+      // Only create image preview for images, not PDFs
+      if (selected.type.startsWith('image/')) {
+        setPreviewUrl(URL.createObjectURL(selected));
+      } else {
+        setPreviewUrl(null);
+      }
       setResult(null);
       setError(null);
     }
@@ -50,7 +113,7 @@ function App() {
     setError(null);
 
     try {
-      const data = await processDocument(file, domainMode);
+      const data = await processDocument(file, domainMode, allowCloudProcessing);
       setResult(data);
       await loadHistory();
     } catch (err) {
@@ -91,86 +154,81 @@ function App() {
     }
   };
 
+  const tabStyle = (tab, color) => ({
+    padding: '8px 18px',
+    borderRadius: '8px',
+    border: activeTab === tab ? `1px solid ${color}` : '1px solid rgba(255,255,255,0.1)',
+    background: activeTab === tab ? `${color}22` : 'rgba(255,255,255,0.03)',
+    color: activeTab === tab ? color : '#94a3b8',
+    fontWeight: 600,
+    fontSize: '13px',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+  });
+
+  if (!authResolved) return <main className="access-gate"><p>Connecting to ClaimGuard…</p></main>;
+  if (authRequired && !authorized) return (
+    <main className="access-gate">
+      <form className="card access-gate-form" onSubmit={handleAuthorize}>
+        <div className="eyebrow">PRIVATE WORKSPACE</div>
+        <h1>ClaimGuard access</h1>
+        <p>Enter the administrator-configured access token. It stays in this browser session only.</p>
+        <label>Access token<input type="password" value={accessToken} onChange={(event) => setAccessToken(event.target.value)} autoComplete="current-password" required /></label>
+        {authError && <p className="notice notice-error" role="alert">{authError}</p>}
+        <button className="primary-button" type="submit">Unlock workspace</button>
+      </form>
+    </main>
+  );
+
   return (
     <ErrorBoundary>
-      <Header />
+      <Header modelStatus={modelStatus} />
 
       <main className="page">
         <div className="hero">
           <div>
-            <div className="eyebrow">CLAIMGUARD · BENEFIT & READINESS COMPANION</div>
-            <h1>Insurance Claim Readiness & Benefit Navigator</h1>
+            <div className="eyebrow">CLAIMGUARD · INSURANCE CLAIM COMPANION</div>
+            <h1>Insurance Claim Readiness &amp; Benefit Navigator</h1>
             <p className="subtitle">
-              Keep each patient’s policy and supporting documents together. Review source pages and confirm important details before acting.
+              Upload PDFs, images or bills. AI extracts data, deterministic engine verifies policy limits, and you manage approvals.
             </p>
           </div>
           <div className="hero-stat">
-            <span>CASE DATA</span>
+            <span>STORAGE</span>
             <strong>Stored locally</strong>
-            <small>Model status shown per workflow</small>
+            <small>PDF + Image supported</small>
           </div>
         </div>
 
         {/* Navigation Tabs */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '12px' }}>
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '14px' }}>
           <button
+            id="tab-expense-auditor"
             onClick={() => setActiveTab('claims')}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '6px',
-              border: activeTab === 'claims' ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.1)',
-              background: activeTab === 'claims' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(255,255,255,0.03)',
-              color: activeTab === 'claims' ? '#38bdf8' : '#94a3b8',
-              fontWeight: 600,
-              fontSize: '13px',
-              cursor: 'pointer',
-            }}
+            style={tabStyle('claims', '#38bdf8')}
           >
-            📄 Expense & Bill Auditor
+            📄 Expense &amp; Bill Auditor
           </button>
           <button
+            id="tab-patient-policy"
             onClick={() => setActiveTab('policy')}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '6px',
-              border: activeTab === 'policy' ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.1)',
-              background: activeTab === 'policy' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.03)',
-              color: activeTab === 'policy' ? '#10b981' : '#94a3b8',
-              fontWeight: 600,
-              fontSize: '13px',
-              cursor: 'pointer',
-            }}
+            style={tabStyle('policy', '#10b981')}
           >
-            🏥 Patient Cases & Policy
-          </button>
-          <button
-            onClick={() => setActiveTab('scam')}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '6px',
-              border: activeTab === 'scam' ? '1px solid #ef4444' : '1px solid rgba(255,255,255,0.1)',
-              background: activeTab === 'scam' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(255,255,255,0.03)',
-              color: activeTab === 'scam' ? '#ef4444' : '#94a3b8',
-              fontWeight: 600,
-              fontSize: '13px',
-              cursor: 'pointer',
-            }}
-          >
-            🛡️ ScamCheck (IRDAI Bima Bharosa)
+            🏥 Patient Cases &amp; Policy
           </button>
         </div>
 
         {error && (
           <div className="notice notice-error">
             <div>
-              <strong>Connection Error</strong>
+              <strong>Error</strong>
               <p style={{ margin: '4px 0 0' }}>{error}</p>
             </div>
             <button onClick={() => setError(null)}>×</button>
           </div>
         )}
 
-        {/* Tab 1: Claims & Expense Auditor */}
+        {/* Tab 1: Expense & Bill Auditor */}
         {activeTab === 'claims' && (
           <div className="work-grid">
             <div>
@@ -182,10 +240,8 @@ function App() {
                 loading={loading}
                 handleFileChange={handleFileChange}
                 handleAnalyze={handleAnalyze}
-                setFile={setFile}
-                setPreviewUrl={setPreviewUrl}
-                setResult={setResult}
-                setError={setError}
+                allowCloudProcessing={allowCloudProcessing}
+                setAllowCloudProcessing={setAllowCloudProcessing}
               />
 
               <HistoryTable
@@ -199,11 +255,8 @@ function App() {
           </div>
         )}
 
-        {/* Tab 2: Policy Navigator & Patient Case */}
+        {/* Tab 2: Patient Case & Policy Navigator */}
         {activeTab === 'policy' && <PolicyNavigator />}
-
-        {/* Tab 3: ScamCheck */}
-        {activeTab === 'scam' && <ScamCheckTab />}
       </main>
     </ErrorBoundary>
   );

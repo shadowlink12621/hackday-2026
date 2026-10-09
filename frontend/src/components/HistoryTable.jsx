@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function HistoryTable({ claimsHistory, handleDecision, handleExportCsv }) {
+export default function HistoryTable({ claimsHistory, handleDecision, handleExportCsv, actionLoadingId }) {
   return (
     <section className="card history-card">
       <div className="card-heading history-heading">
@@ -16,8 +16,10 @@ export default function HistoryTable({ claimsHistory, handleDecision, handleExpo
             <thead>
               <tr>
                 <th>ID</th>
+                <th>Submitted</th>
                 <th>Type</th>
-                <th>Status</th>
+                <th>AI Check</th>
+                <th>Manager Status</th>
                 <th>Amount</th>
                 <th className="right">Action</th>
               </tr>
@@ -25,29 +27,27 @@ export default function HistoryTable({ claimsHistory, handleDecision, handleExpo
             <tbody>
               {claimsHistory.map(claim => (
                 <tr key={claim.id}>
-                  <td className="claim-id">
-                    #{claim.id}
-                    <a
-                      href={`http://localhost:8000/api/claims/${claim.id}/calendar.ics`}
-                      download={`claim_${claim.id}_reminders.ics`}
-                      title="Download Reminder (.ics)"
-                      style={{ marginLeft: '6px', textDecoration: 'none', cursor: 'pointer' }}
-                    >
-                      📅
-                    </a>
-                  </td>
+                  <td className="claim-id">#{claim.id}</td>
+                  <td>{claim.timestamp ? new Date(claim.timestamp).toLocaleDateString() : '—'}</td>
                   <td>{claim.domain === 'health_insurance' ? 'Health' : 'Expense'}</td>
                   <td>
+                    <span className={`status-pill ${claim.is_valid ? 'pill-valid' : 'pill-review'}`}>
+                      {claim.is_valid ? 'Valid' : 'Flagged'}
+                    </span>
+                  </td>
+                  <td>
                     <span className={`status-pill ${claim.status === 'Approved' ? 'pill-valid' : (claim.status === 'Rejected' ? 'pill-review' : 'pill-pending')}`}>
-                      {claim.status || (claim.is_valid ? 'Valid' : 'Flagged')}
+                      {claim.status || 'Pending'}
                     </span>
                   </td>
                   <td>₹{claim.total_inr}</td>
                   <td className="right">
                     {(!claim.status || claim.status === 'Pending') && (
                       <div className="action-buttons" style={{ justifyContent: 'flex-end' }}>
-                        <button onClick={() => handleDecision(claim.id, 'Approved')}>Approve</button>
-                        <button className="reject-button" onClick={() => handleDecision(claim.id, 'Rejected')}>Reject</button>
+                        <button disabled={actionLoadingId === claim.id} onClick={() => handleDecision(claim.id, 'Approved')}>
+                          {actionLoadingId === claim.id ? 'Saving…' : 'Approve'}
+                        </button>
+                        <button className="reject-button" disabled={actionLoadingId === claim.id} onClick={() => handleDecision(claim.id, 'Rejected')}>Reject</button>
                       </div>
                     )}
                   </td>
