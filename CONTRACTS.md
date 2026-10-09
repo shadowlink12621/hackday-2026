@@ -1,15 +1,15 @@
 # API Contracts
 
-## `POST /api/process`
+## `POST /api/validate`
 Upload an image and run extraction + validation.
 **Request (FormData):**
-- `prompt` (string)
+- `prompt` (string, optional)
 - `file` (File, optional): `.jpg` or `.png`
 - `domain_mode` (string): `"expense"` or `"health_insurance"`
 - `rule_settings` (JSON string)
 
 **Response (JSON):**
-Returns `claim_id` along with `metadata`, `perception` (extracted JSON), and `verification` (passed/failed rules).
+Returns `claim_id` along with `metadata`, `perception` (extracted JSON), and `validation` (passed/failed rules).
 
 ## `GET /api/claims`
 Fetch all processed claims for the dashboard.
