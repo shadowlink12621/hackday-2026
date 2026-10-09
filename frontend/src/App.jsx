@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { validateDocument, fetchClaims, submitDecision, getExportUrl } from './api';
+import { processDocument, getClaims, saveDecision, getAuditCsv } from './api';
 import './index.css';
 
 function App() {
@@ -14,7 +14,7 @@ function App() {
 
   const loadHistory = async () => {
     try {
-      const history = await fetchClaims();
+      const history = await getClaims();
       setClaimsHistory(history);
     } catch (err) {
       console.error(err);
@@ -64,7 +64,7 @@ function App() {
     setError(null);
     
     try {
-      const data = await validateDocument(file, domainMode);
+      const data = await processDocument(file, domainMode);
       setResult(data);
       // Reload history to show the newly added claim
       await loadHistory();
@@ -79,7 +79,7 @@ function App() {
     if (!result || !result.claim_id) return;
     
     try {
-      await submitDecision(result.claim_id, decision);
+      await saveDecision(result.claim_id, decision);
       alert(`Claim ${decision} successfully!`);
       setResult(null);
       setFile(null);
@@ -87,6 +87,23 @@ function App() {
       await loadHistory();
     } catch (err) {
       alert("Failed to submit decision");
+    }
+  };
+
+  const handleExportCsv = async (e) => {
+    e.preventDefault();
+    try {
+      const blob = await getAuditCsv();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = 'audit_report.csv';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert("Failed to download CSV");
     }
   };
 
@@ -152,9 +169,9 @@ function App() {
           <div style={{ marginTop: '2rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h2>Recent Claims</h2>
-              <a href={getExportUrl()} className="btn" style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', marginTop: 0, textDecoration: 'none' }} target="_blank" rel="noreferrer">
+              <button className="btn" style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', marginTop: 0 }} onClick={handleExportCsv}>
                 Export Full CSV Audit
-              </a>
+              </button>
             </div>
             <div className="table-container">
               <table className="items-table">
