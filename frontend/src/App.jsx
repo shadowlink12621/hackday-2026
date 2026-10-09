@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react';
-import { processDocument } from './api';
+import { useState, useRef, useEffect } from 'react';
+import { validateDocument, fetchClaims, submitDecision, getExportUrl } from './api';
 import './index.css';
 
 function App() {
@@ -9,7 +9,21 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [claimsHistory, setClaimsHistory] = useState([]);
   const fileInputRef = useRef(null);
+
+  const loadHistory = async () => {
+    try {
+      const history = await fetchClaims();
+      setClaimsHistory(history);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    loadHistory();
+  }, []);
 
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
@@ -50,8 +64,10 @@ function App() {
     setError(null);
     
     try {
-      const data = await processDocument(file, domainMode);
+      const data = await validateDocument(file, domainMode);
       setResult(data);
+      // Reload history to show the newly added claim
+      await loadHistory();
     } catch (err) {
       setError(err.message || 'Failed to connect to the backend.');
     } finally {
@@ -59,23 +75,19 @@ function App() {
     }
   };
 
-  const exportToCSV = () => {
-    if (!result || !result.perception.structured_data.items) return;
-    const items = result.perception.structured_data.items;
+  const handleDecision = async (decision) => {
+    if (!result || !result.claim_id) return;
     
-    const header = ['Description', 'Category', 'Amount'];
-    const rows = items.map(item => [`"${item.description}"`, `"${item.category || ''}"`, item.amount]);
-    const csvContent = [header, ...rows].map(e => e.join(",")).join("\n");
-    
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", "claim_items.csv");
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      await submitDecision(result.claim_id, decision);
+      alert(`Claim ${decision} successfully!`);
+      setResult(null);
+      setFile(null);
+      setPreviewUrl(null);
+      await loadHistory();
+    } catch (err) {
+      alert("Failed to submit decision");
+    }
   };
 
   return (
@@ -86,7 +98,7 @@ function App() {
       </header>
       
       <main className="container">
-        {/* Left Panel: Input */}
+        {/* Left Panel: Input & History */}
         <section className="panel">
           <h2>Input Claim</h2>
 
@@ -136,6 +148,46 @@ function App() {
           </button>
           
           {error && <div style={{color: 'var(--error)', marginTop: '1rem', textAlign: 'center'}}>{error}</div>}
+
+          <div style={{ marginTop: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2>Recent Claims</h2>
+              <a href={getExportUrl()} className="btn" style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', marginTop: 0, textDecoration: 'none' }} target="_blank" rel="noreferrer">
+                Export Full CSV Audit
+              </a>
+            </div>
+            <div className="table-container">
+              <table className="items-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Amount (INR)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {claimsHistory.map(claim => (
+                    <tr key={claim.id}>
+                      <td>#{claim.id}</td>
+                      <td>{claim.domain}</td>
+                      <td>
+                        <span className={`status-badge ${claim.is_valid ? 'valid' : 'invalid'}`} style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem', width: 'auto' }}>
+                          {claim.status || (claim.is_valid ? 'Valid' : 'Flagged')}
+                        </span>
+                      </td>
+                      <td>₹{claim.total_inr}</td>
+                    </tr>
+                  ))}
+                  {claimsHistory.length === 0 && (
+                    <tr>
+                      <td colSpan="4" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No claims processed yet.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </section>
         
         {/* Right Panel: Output & Dashboard */}
@@ -156,11 +208,11 @@ function App() {
               </div>
             )}
 
-            {result && (
+            {result && result.validation && (
               <>
                 {/* Glowing Badge for Overall Status */}
-                <div className={`status-badge ${result.verification.is_valid ? 'valid' : 'invalid'}`}>
-                  {result.verification.is_valid ? 'APPROVED' : 'FLAGGED / MANUAL REVIEW'}
+                <div className={`status-badge ${result.validation.is_valid ? 'valid' : 'invalid'}`}>
+                  {result.validation.is_valid ? 'SYSTEM APPROVED' : 'FLAGGED / MANUAL REVIEW'}
                 </div>
 
                 {/* Extracted Data summary */}
@@ -184,18 +236,13 @@ function App() {
                   </div>
                   <div className="data-row">
                     <span className="data-label">Final Amount (INR)</span>
-                    <span className="data-value" style={{ color: 'var(--accent)' }}>₹{result.verification.final_amount_inr}</span>
+                    <span className="data-value" style={{ color: 'var(--accent)' }}>₹{result.validation.final_amount_inr}</span>
                   </div>
                 </div>
 
                 {/* Line Items Table */}
                 <div className="section-card">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                    <h3 style={{ margin: 0 }}>🛒 Line Items</h3>
-                    <button className="btn" style={{ margin: 0, padding: '0.5rem 1rem', fontSize: '0.9rem' }} onClick={exportToCSV}>
-                      Export to CSV
-                    </button>
-                  </div>
+                  <h3 style={{ marginBottom: '1rem' }}>🛒 Line Items</h3>
                   <div className="table-container">
                     <table className="items-table">
                       <thead>
@@ -222,7 +269,7 @@ function App() {
                 <div className="section-card">
                   <h3 style={{ marginBottom: '1rem' }}>⚙️ Engine Verification</h3>
                   <div>
-                    {result.verification.results.map((rule, idx) => (
+                    {result.validation.results.map((rule, idx) => (
                       <div key={idx} className={`rule-item ${rule.passed ? 'pass' : 'fail'}`}>
                         <div className="rule-icon">{rule.passed ? '✅' : '❌'}</div>
                         <div className="rule-content">
@@ -232,6 +279,16 @@ function App() {
                       </div>
                     ))}
                   </div>
+                </div>
+
+                {/* Manager Decision */}
+                <div className="section-card" style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                  <button className="btn" style={{ flex: 1, background: 'var(--success)' }} onClick={() => handleDecision('Approved')}>
+                    Approve Claim
+                  </button>
+                  <button className="btn" style={{ flex: 1, background: 'var(--error)' }} onClick={() => handleDecision('Rejected')}>
+                    Reject Claim
+                  </button>
                 </div>
               </>
             )}

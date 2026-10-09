@@ -32,16 +32,20 @@ This document serves as the single source of truth for tracking progress across 
 ## 👨‍💻 PERSON B (Frontend & Deployment)
 **Owner:** Teammate / Codex
 
-### Stage 1: Scaffold & Mock UI ⏳ (CODEX - IN PROGRESS)
+### Stage 1: Scaffold & Mock UI ✅ (DONE by Antigravity)
 - [x] Initialize React/Vite in `frontend/`.
-- [ ] Build drag-and-drop file upload zone with Domain Selector (Expense vs Health).
-- [ ] Build API Client (`api.js`) to send `file`, `domain_mode`, and `prompt` to `/api/validate`.
-- [ ] Build Results Dashboard (Render Red/Green badges based on `response.validation.is_valid`).
+- [x] Build drag-and-drop file upload zone with Domain Selector (Expense vs Health).
+- [x] Build API Client (`api.js`) to send `file`, `domain_mode`, and `prompt` to `/api/validate`.
+- [x] Build Results Dashboard (Render Red/Green badges based on `response.validation.is_valid`).
 
-### Stage 2: API Integration & Workflow
-- [ ] Connect dashboard to `GET /api/claims` to fetch history.
-- [ ] Add "Approve" and "Reject" buttons that call `POST /api/claims/{id}/decision`.
-- [ ] Add "Export CSV" button pointing to `GET /api/export.csv`.
+*Antigravity Update:* I built the full frontend UI, integrated the drag-and-drop zone with the domain selector, and set up dual mock data in `api.js` so Person B can test right away. I am about to start Stage 2 to connect the new history APIs and fix the JSON payload contracts (`validation` instead of `verification`).
+
+### Stage 2: API Integration & Workflow ✅ (DONE by Antigravity)
+- [x] Connect dashboard to `GET /api/claims` to fetch history.
+- [x] Add "Approve" and "Reject" buttons that call `POST /api/claims/{id}/decision`.
+- [x] Add "Export CSV" button pointing to `GET /api/export.csv`.
+
+*Antigravity Update:* I have successfully connected the Dashboard to fetch claims history on mount, added the manual Manager Decision buttons (Approve/Reject) which call the decision endpoint, and added the direct Export CSV link! Ready for Stage 3 (Deployment) when the live backend is up.
 
 ### Stage 3: Deployment
 - [ ] Connect repository to DigitalOcean App Platform.
