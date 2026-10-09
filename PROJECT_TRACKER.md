@@ -62,6 +62,13 @@ This is the shared checklist for the Hack Day team. Check the current branch and
 - [x] Add `.dockerignore` rules to exclude local secrets, dependency folders, generated assets, and databases.
 - [x] Document the local launch command and `.env` setup below.
 
+## Companion Features
+
+- [x] Add the Benefit Calendar UI with claim-specific `.ics` downloads.
+- [x] Add ScamCheck with a risk score, red flags, and IRDAI guidance.
+- [x] Add insurer knowledge cards with claim gotchas and official portal links.
+- [x] Add a live Cloud Gemma / Local Ollama / Offline model status badge.
+
 ## Run the Local Demo
 
 1. Copy `.env.example` to `.env` and add `GEMINI_API_KEY` if live Gemini extraction is desired. Leave it blank to use the backend fallback.

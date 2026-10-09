@@ -3,7 +3,6 @@ from datetime import datetime, timezone
 from io import StringIO
 import json
 import os
-import re
 import sqlite3
 import time
 from typing import Any, Optional
@@ -13,8 +12,17 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 import pymupdf
-from .engine import get_all_claims, run_deterministic_checks, save_claim, update_claim_decision, get_claim_by_id
+from .engine import (
+    analyze_insurance_message,
+    generate_claim_calendar_ics,
+    get_all_claims,
+    get_claim_by_id,
+    run_deterministic_checks,
+    save_claim,
+    update_claim_decision,
+)
 from .gemma_client import extract_claim_from_pdf_text, extract_form_data, extract_policy_guide, chat_with_claim
+from .knowledge_loader import get_insurer_knowledge, list_known_insurers
 
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png"}
@@ -81,6 +89,14 @@ def health_check():
     return {"status": "ok", "service": "ClaimGuard Validation Engine"}
 
 
+@app.get("/api/model/status")
+def model_status():
+    """Returns runtime AI model connectivity (Cloud Gemma vs Local Ollama vs Offline Mock)."""
+    from .gemma_client import get_model_status
+
+    return get_model_status()
+
+
 @app.post("/api/validate")
 async def process_request(
     prompt: Optional[str] = Form(""),
@@ -122,6 +138,8 @@ async def process_request(
                 detail="Invalid rule_settings: must be a valid JSON object string.",
             )
 
+    policy_text = ""
+    policy_page_count = 0
     if mime_type == "application/pdf":
         policy_text, policy_page_count = await run_in_threadpool(extract_pdf_text, contents)
         if not policy_text:
@@ -166,11 +184,11 @@ async def process_request(
             }
 
     if mime_type == "application/pdf":
-        extracted_data, is_mock = await run_in_threadpool(
+        extracted_data, is_mock, model_source = await run_in_threadpool(
             extract_claim_from_pdf_text, policy_text, prompt or "", domain_mode
         )
     else:
-        extracted_data, is_mock = await run_in_threadpool(
+        extracted_data, is_mock, model_source = await run_in_threadpool(
             extract_form_data, contents, mime_type, prompt or "", domain_mode
         )
     validation_result = run_deterministic_checks(extracted_data, contents, rule_settings, domain_mode)
@@ -181,7 +199,7 @@ async def process_request(
     response_data = {
         "claim_id": claim_id,
         "metadata": {
-            "model_used": os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it"),
+            "model_used": model_source,
             "is_fallback_mock": is_mock,
             "latency_ms": latency_ms,
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -213,6 +231,22 @@ def list_claims():
     return get_all_claims()
 
 
+@app.get("/api/claims/{claim_id}/calendar.ics", response_class=PlainTextResponse)
+def download_claim_calendar(claim_id: int):
+    """Generates an RFC 5545 .ics calendar reminder for claim submission & follow-up."""
+    claims = get_all_claims()
+    claim = next((c for c in claims if c["id"] == claim_id), None)
+    if not claim:
+        raise HTTPException(status_code=404, detail=f"Claim {claim_id} not found.")
+
+    ics_content = generate_claim_calendar_ics(claim)
+    return PlainTextResponse(
+        ics_content,
+        media_type="text/calendar",
+        headers={"Content-Disposition": f"attachment; filename=claimguard_claim_{claim_id}.ics"},
+    )
+
+
 class DecisionRequest(BaseModel):
     decision: str  # "Approved" or "Rejected"
 
@@ -241,6 +275,36 @@ async def chat_endpoint(payload: ChatRequest):
     
     answer = await run_in_threadpool(chat_with_claim, json.dumps(claim), payload.question)
     return {"answer": answer}
+
+class ScamCheckRequest(BaseModel):
+    message_text: str
+
+
+@app.post("/api/scamcheck")
+def check_scam_message(payload: ScamCheckRequest):
+    """
+    Checks an SMS, email, or WhatsApp message for insurance fraud and fee-to-release scams.
+    Cross-references IRDAI Bima Bharosa warnings.
+    """
+    if not payload.message_text or not payload.message_text.strip():
+        raise HTTPException(status_code=400, detail="Message text is required.")
+    return analyze_insurance_message(payload.message_text)
+
+
+@app.get("/api/insurers")
+def list_insurers():
+    """Returns list of supported insurers with local knowledge base entries."""
+    return {"insurers": list_known_insurers()}
+
+
+@app.get("/api/insurers/{insurer_key}")
+def get_insurer_details(insurer_key: str):
+    """Returns policy gotchas, sub-limits, and rejection traps for an insurer."""
+    data = get_insurer_knowledge(insurer_key)
+    if not data:
+        raise HTTPException(status_code=404, detail=f"No knowledge found for insurer '{insurer_key}'.")
+    return data
+
 
 @app.get("/api/export.csv", response_class=PlainTextResponse)
 def export_claims_csv():

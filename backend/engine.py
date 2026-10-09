@@ -5,6 +5,7 @@ import os
 import sqlite3
 import time
 from contextlib import contextmanager
+from datetime import datetime, timedelta
 from typing import Any, List, Optional
 from pydantic import BaseModel
 
@@ -341,9 +342,162 @@ def run_deterministic_checks(
 
     is_valid = all(r.passed for r in results)
 
+    # 4. Local Insurer Knowledge Cross-Reference (If applicable)
+    if domain_mode == "health_insurance":
+        from .knowledge_loader import get_insurer_knowledge
+        insurer_info = get_insurer_knowledge(extracted_data.provider_name)
+        if insurer_info:
+            for trap in insurer_info.get("key_traps", [])[:2]:
+                results.append(
+                    RuleResult(
+                        rule_name=f"Policy Advisory ({insurer_info['title']})",
+                        passed=True,
+                        message=f"💡 Important: {trap}",
+                    )
+                )
 
     return ValidationResult(
         is_valid=is_valid,
         final_amount_inr=final_amount_inr,
         results=results,
     )
+
+
+def generate_claim_calendar_ics(claim: dict) -> str:
+    """Generates an RFC 5545 .ics calendar reminder file for claim deadlines."""
+    raw_date = claim.get("extracted_data", {}).get("date_extracted")
+    base_dt = datetime.now()
+    if raw_date:
+        try:
+            base_dt = datetime.strptime(str(raw_date)[:10], "%Y-%m-%d")
+        except Exception:
+            pass
+
+    claim_id = claim.get("id", "1")
+    vendor = claim.get("extracted_data", {}).get("provider_name", "Claim Provider")
+    total = claim.get("total_inr", 0.0)
+
+    deadline_dt = base_dt + timedelta(days=30)
+    followup_dt = base_dt + timedelta(days=7)
+    post_hosp_dt = base_dt + timedelta(days=90)
+
+    def format_ics_date(dt: datetime) -> str:
+        return dt.strftime("%Y%m%d")
+
+    ics_content = f"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//ClaimGuard//Claim Readiness & Benefit Navigator//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+BEGIN:VEVENT
+UID:claimguard-deadline-{claim_id}@claimguard.ai
+DTSTAMP:{datetime.now().strftime("%Y%m%dT%H%M%SZ")}
+DTSTART;VALUE=DATE:{format_ics_date(deadline_dt)}
+DTEND;VALUE=DATE:{format_ics_date(deadline_dt + timedelta(days=1))}
+SUMMARY:🚨 ClaimGuard Deadline: Submit Documents for Claim #{claim_id} ({vendor})
+DESCRIPTION:Official policy submission cutoff (30-day rule). Ensure all original hospital bills, discharge summary, and pharmacy receipts for ₹{total:.2f} are submitted to your insurer or TPA.
+STATUS:CONFIRMED
+BEGIN:VALARM
+TRIGGER:-P1D
+ACTION:DISPLAY
+DESCRIPTION:Reminder: Claim #{claim_id} document submission deadline tomorrow!
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:claimguard-followup-{claim_id}@claimguard.ai
+DTSTAMP:{datetime.now().strftime("%Y%m%dT%H%M%SZ")}
+DTSTART;VALUE=DATE:{format_ics_date(followup_dt)}
+DTEND;VALUE=DATE:{format_ics_date(followup_dt + timedelta(days=1))}
+SUMMARY:📞 ClaimGuard Checkpoint: Follow up on Claim #{claim_id} with TPA
+DESCRIPTION:Follow up with insurer/TPA helpline to verify claim acknowledgement number and pre-authorization status for ₹{total:.2f}.
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+UID:claimguard-posthosp-{claim_id}@claimguard.ai
+DTSTAMP:{datetime.now().strftime("%Y%m%dT%H%M%SZ")}
+DTSTART;VALUE=DATE:{format_ics_date(post_hosp_dt)}
+DTEND;VALUE=DATE:{format_ics_date(post_hosp_dt + timedelta(days=1))}
+SUMMARY:💊 ClaimGuard Reminder: Submit Post-Hospitalization Bills for Claim #{claim_id}
+DESCRIPTION:Most policies cover 60 to 90 days of post-hospitalization medicines and diagnostic follow-up visits. Collect all OPD bills and submit for reimbursement.
+STATUS:CONFIRMED
+END:VEVENT
+END:VCALENDAR
+"""
+    return ics_content
+
+
+def analyze_insurance_message(message_text: str) -> dict:
+    """
+    Analyzes an incoming SMS, email, or WhatsApp message for insurance fraud red flags.
+    Cross-references IRDAI Bima Bharosa warnings against fee-for-settlement scams.
+    """
+    text_lower = message_text.lower()
+    red_flags = []
+    risk_score = 0
+
+    fee_keywords = [
+        "pay fee", "transfer fee", "processing charges", "gst charge to release",
+        "refundable deposit", "pay rs", "pay inr", "clear tax to claim",
+    ]
+    if any(k in text_lower for k in fee_keywords) and any(w in text_lower for w in ["claim", "bonus", "fund", "settlement", "refund", "insurance"]):
+        red_flags.append(
+            "🚨 UPFRONT PAYMENT DEMAND: The message asks for money/fee to release an insurance claim. "
+            "According to IRDAI Bima Bharosa guidelines, insurers NEVER ask policyholders for payment to release an approved claim or bonus."
+        )
+        risk_score += 45
+
+    credential_keywords = ["otp", "upi pin", "scan qr", "qr code", "netbanking password", "card details", "cvv"]
+    if any(k in text_lower for k in credential_keywords):
+        red_flags.append(
+            "🚨 SENSITIVE CREDENTIALS REQUESTED: Legitimate insurance claims never require you to share OTPs, "
+            "enter your UPI PIN, or scan a payment QR code."
+        )
+        risk_score += 40
+
+    guarantee_keywords = ["100% guaranteed approval", "guaranteed settlement", "government authorized private agent", "secret bonus"]
+    if any(k in text_lower for k in guarantee_keywords):
+        red_flags.append(
+            "⚠️ SUSPICIOUS GUARANTEE: Legitimate claims undergo medical underwriter audit. "
+            "Promises of 'guaranteed approval' from third parties often signal broker fraud."
+        )
+        risk_score += 20
+
+    suspicious_links = ["bit.ly", "tinyurl", "wa.me", "t.me", ".xyz", ".top"]
+    if any(k in text_lower for k in suspicious_links):
+        red_flags.append(
+            "⚠️ SUSPICIOUS LINK: Message contains an unverified shortlink or non-official domain "
+            "instead of the insurer's registered portal."
+        )
+        risk_score += 15
+
+    urgency_keywords = ["immediate action", "within 2 hours", "account will be blocked", "final notice", "lapse immediately"]
+    if any(k in text_lower for k in urgency_keywords):
+        red_flags.append(
+            "⚠️ HIGH PRESSURE TACTICS: The sender uses urgency threats to rush you into acting "
+            "without verifying with your insurer."
+        )
+        risk_score += 10
+
+    risk_score = min(100, risk_score)
+    if risk_score >= 40:
+        risk_level = "HIGH_RISK"
+        is_suspicious = True
+        guidance = "DO NOT pay any money, share OTPs, or click links. Verify directly with your insurer's official helpline or register a grievance on IRDAI's Bima Bharosa portal."
+    elif risk_score > 0:
+        risk_level = "MEDIUM_RISK"
+        is_suspicious = True
+        guidance = "Exercise caution. Confirm the authenticity of this message with your insurer's official customer support before responding."
+    else:
+        risk_level = "SAFE"
+        is_suspicious = False
+        guidance = "No obvious red flags detected. Ensure any communication matches your official policy documents."
+
+    return {
+        "is_suspicious": is_suspicious,
+        "risk_score": risk_score,
+        "risk_level": risk_level,
+        "detected_red_flags": red_flags,
+        "guidance": guidance,
+        "official_portal_link": "https://bimabharosa.irdai.gov.in",
+        "regulatory_reference": "IRDAI Consumer Protection Notice (No fee required for claim settlement)",
+    }

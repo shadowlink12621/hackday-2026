@@ -27,7 +27,7 @@ CORS is configured to allow `*` (all origins, methods, and headers).
 
 ---
 
-### Endpoint 1: `POST /api/validate`
+### Core Endpoint: `POST /api/validate`
 Uploads a receipt/invoice/medical bill image for multimodal extraction and deterministic policy validation.
 
 * **Request Type:** `multipart/form-data`
@@ -42,7 +42,7 @@ Uploads a receipt/invoice/medical bill image for multimodal extraction and deter
 {
   "claim_id": 1,
   "metadata": {
-    "model_used": "gemma-4-26b-a4b-it",
+    "model_used": "cloud_gemma (gemma-4-26b-a4b-it)",
     "is_fallback_mock": false,
     "latency_ms": 350,
     "timestamp": "2026-10-09T07:00:00Z",
@@ -73,7 +73,7 @@ Uploads a receipt/invoice/medical bill image for multimodal extraction and deter
       {
         "rule_name": "Exact Duplicate Submission (SHA-256)",
         "passed": true,
-        "message": "Document hash is unique in ledger."
+        "message": "Image SHA-256 is unique."
       },
       {
         "rule_name": "Math Verification",
@@ -83,7 +83,7 @@ Uploads a receipt/invoice/medical bill image for multimodal extraction and deter
       {
         "rule_name": "Policy Limit",
         "passed": true,
-        "message": "Converted 250.0 INR to 250.0 INR. Within policy limit of ₹4000.0."
+        "message": "Within policy limit."
       }
     ]
   }
@@ -92,76 +92,45 @@ Uploads a receipt/invoice/medical bill image for multimodal extraction and deter
 
 ---
 
-### Endpoint 2: `GET /api/claims`
-Retrieves all historical claims stored in SQLite (newest first).
+### Companion Endpoint: `GET /api/claims/{claim_id}/calendar.ics`
+Generates and downloads an RFC 5545 `.ics` calendar reminder file for the claim.
+Tracks:
+- 30-day statutory claim documents filing cutoff.
+- 7-day TPA / Insurer follow-up milestone.
+- 90-day post-hospitalization bills submission deadline.
 
-* **Request Type:** `GET`
-* **Response Shape (JSON Array):**
+* **Usage in UI:** Directly link with an `<a>` tag or `window.open(`${API_URL}/claims/${id}/calendar.ics`)`.
+
+---
+
+### Companion Endpoint: `POST /api/scamcheck`
+Checks an SMS, email, or WhatsApp message for insurance fraud and refund fee extortion.
+
+* **Request Type:** `POST application/json`
+* **Body:** `{"message_text": "Pay fee of Rs 1500 to release claim refund..."}`
+* **Response:**
 ```json
-[
-  {
-    "id": 1,
-    "domain": "expense",
-    "total_inr": 250.0,
-    "is_valid": true,
-    "status": "Pending",
-    "extracted_data": {
-      "provider_name": "Starbucks Coffee",
-      "patient_or_employee_name": "John Doe",
-      "date_extracted": "2026-10-09",
-      "currency": "INR",
-      "items": [
-        { "description": "Latte", "amount": 250.0, "category": "meals" }
-      ],
-      "total_extracted": 250.0,
-      "confidence_score": 0.95
-    },
-    "validation_data": {
-      "is_valid": true,
-      "final_amount_inr": 250.0,
-      "results": [...]
-    },
-    "timestamp": "2026-10-09 12:30:00"
-  }
-]
+{
+  "is_suspicious": true,
+  "risk_score": 45,
+  "risk_level": "HIGH_RISK",
+  "detected_red_flags": [
+    "🚨 UPFRONT PAYMENT DEMAND: The message asks for money/fee to release an insurance claim. According to IRDAI Bima Bharosa guidelines, insurers NEVER ask policyholders for payment to release an approved claim or bonus."
+  ],
+  "guidance": "DO NOT pay any money, share OTPs, or click links. Verify directly with your insurer's official helpline or register a grievance on IRDAI's Bima Bharosa portal.",
+  "official_portal_link": "https://bimabharosa.irdai.gov.in"
+}
 ```
 
 ---
 
-### Endpoint 3: `POST /api/claims/{claim_id}/decision`
-Allows a manager to officially Approve or Reject a claim.
-
-* **Request Type:** `POST`
-* **Headers:** `Content-Type: application/json`
-* **Body:**
-```json
-{
-  "decision": "Approved"
-}
-```
-*(Valid values for `decision`: `"Approved"` or `"Rejected"`)*
-
-* **Response Shape (JSON):**
-```json
-{
-  "status": "success",
-  "claim_id": 1,
-  "decision": "Approved"
-}
-```
-
-* **Error Codes:**
-  * `400 Bad Request`: When `decision` is not `"Approved"` or `"Rejected"`.
-  * `404 Not Found`: When `claim_id` does not exist in SQLite.
+### Companion Endpoint: `GET /api/insurers` & `GET /api/insurers/{insurer_key}`
+Fetches local knowledge base and rejection traps for insurers: `hdfc_ergo`, `star_health`, `niva_bupa`, `care_health`, `icici_lombard`, `sbi_general`.
 
 ---
 
-### Endpoint 4: `GET /api/export.csv`
-Downloads an audit report CSV of all claims.
-
-* **Request Type:** `GET`
-* **Headers returned:** `Content-Type: text/csv`, `Content-Disposition: attachment; filename=claimguard_audit.csv`
-* **CSV Columns:** `ID, Timestamp, Domain, Total_INR, System_Valid, Manager_Status, Vendor/Hospital`
+### Model Status Endpoint: `GET /api/model/status`
+Returns runtime AI model status (Cloud Gemma 4 vs Local Ollama Gemma vs Offline Mock).
 
 ---
 
@@ -213,6 +182,38 @@ export const recordClaimDecision = async (claimId, decision) => {
   return await res.json();
 };
 
+export const checkScamMessage = async (messageText) => {
+  const res = await fetch(`${API_URL}/scamcheck`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message_text: messageText }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || 'Failed to analyze message');
+  }
+  return await res.json();
+};
+
+export const fetchInsurers = async () => {
+  const res = await fetch(`${API_URL}/insurers`);
+  if (!res.ok) throw new Error('Failed to fetch insurers');
+  return await res.json();
+};
+
+export const fetchInsurerKnowledge = async (insurerKey) => {
+  const res = await fetch(`${API_URL}/insurers/${insurerKey}`);
+  if (!res.ok) throw new Error('Failed to fetch insurer details');
+  return await res.json();
+};
+
+export const fetchModelStatus = async () => {
+  const res = await fetch(`${API_URL}/model/status`);
+  if (!res.ok) throw new Error('Failed to fetch model status');
+  return await res.json();
+};
+
+export const getCalendarIcsUrl = (claimId) => `${API_URL}/claims/${claimId}/calendar.ics`;
 export const getExportCsvUrl = () => `${API_URL}/export.csv`;
 ```
 

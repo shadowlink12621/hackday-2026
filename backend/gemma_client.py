@@ -1,8 +1,10 @@
-import os
-from pydantic import BaseModel, Field
-from typing import Optional, List
+import base64
 import json
 import re
+import os
+import urllib.request
+from typing import Optional, List, Tuple
+from pydantic import BaseModel, Field
 
 try:
     from google import genai
@@ -10,6 +12,7 @@ try:
     HAS_GENAI = True
 except ImportError:
     HAS_GENAI = False
+
 
 class LineItem(BaseModel):
     description: str
@@ -42,17 +45,106 @@ class PolicyGuide(BaseModel):
     source: str = "keyword_scan"
 
 
-def extract_form_data(file_bytes: bytes, mime_type: str, user_prompt: str, domain_mode: str) -> tuple[ClaimExtraction, bool]:
+def get_model_status() -> dict:
+    """Checks and returns the status of Cloud Gemma, Local Ollama, and Offline Mock."""
+    cloud_key = bool(os.environ.get("GEMINI_API_KEY"))
+    ollama_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+    local_ollama_online = False
+    local_models = []
+
+    try:
+        req = urllib.request.Request(f"{ollama_host}/api/tags", headers={"User-Agent": "ClaimGuard/1.0"})
+        with urllib.request.urlopen(req, timeout=0.8) as resp:
+            if resp.status == 200:
+                data = json.loads(resp.read().decode())
+                local_ollama_online = True
+                local_models = [m.get("name") for m in data.get("models", [])]
+    except Exception:
+        local_ollama_online = False
+
+    preferred = "cloud_gemma" if (cloud_key and HAS_GENAI and not os.environ.get("USE_LOCAL_LLM")) else ("local_ollama" if local_ollama_online else "offline_mock")
+
+    return {
+        "cloud_gemma_available": bool(cloud_key and HAS_GENAI),
+        "cloud_model": os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it"),
+        "local_ollama_online": local_ollama_online,
+        "local_ollama_host": ollama_host,
+        "local_models": local_models,
+        "active_backend": preferred,
+        "offline_ready": True,
+    }
+
+
+def _extract_via_ollama(file_bytes: bytes, user_prompt: str, domain_mode: str) -> Optional[ClaimExtraction]:
+    """Attempts extraction via local Ollama open-source Gemma runtime."""
+    ollama_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+    ollama_model = os.environ.get("OLLAMA_MODEL", "gemma2")
+
+    prompt = f"""You are ClaimGuard, an insurance and expense audit engine.
+Domain: {domain_mode}
+User Context: {user_prompt}
+Analyze the document and output JSON conforming to:
+{{
+  "provider_name": "vendor or hospital name",
+  "patient_or_employee_name": "name",
+  "date_extracted": "YYYY-MM-DD",
+  "currency": "INR",
+  "items": [{{"description": "item", "amount": 100.0, "category": "room_rent"}}],
+  "total_extracted": 100.0,
+  "confidence_score": 0.95
+}}
+Output ONLY valid JSON.
+"""
+    payload: dict = {
+        "model": ollama_model,
+        "prompt": prompt,
+        "stream": False,
+        "format": "json",
+    }
+    if file_bytes and len(file_bytes) > 0:
+        b64 = base64.b64encode(file_bytes).decode("utf-8")
+        payload["images"] = [b64]
+
+    try:
+        req = urllib.request.Request(
+            f"{ollama_host}/api/generate",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json", "User-Agent": "ClaimGuard/1.0"},
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            if resp.status == 200:
+                result = json.loads(resp.read().decode())
+                response_text = result.get("response", "{}")
+                return ClaimExtraction.model_validate_json(response_text)
+    except Exception as e:
+        print(f"Local Ollama inference failed: {e}")
+    return None
+
+
+def extract_form_data(
+    file_bytes: bytes, mime_type: str, user_prompt: str, domain_mode: str
+) -> Tuple[ClaimExtraction, bool, str]:
     """
-    Uses Gemma 4 to analyze the receipt or health insurance claim.
-    Returns (ClaimExtraction, is_fallback_mock).
+    Multimodal extraction engine supporting:
+    1. Google Cloud GenAI (Gemma 4 / Gemini)
+    2. Local Ollama Gemma (offline open-source)
+    3. Structured offline mock fallback
+    Returns (ClaimExtraction, is_fallback_mock, model_source_string).
     """
     api_key = os.environ.get("GEMINI_API_KEY")
+    use_local_llm = os.environ.get("USE_LOCAL_LLM", "").lower() in ("1", "true", "yes")
 
-    if HAS_GENAI and api_key and file_bytes:
+    # Tier 1: Local Ollama if explicitly requested or if no cloud key is present
+    if use_local_llm or (not api_key and file_bytes):
+        ollama_extracted = _extract_via_ollama(file_bytes, user_prompt, domain_mode)
+        if ollama_extracted:
+            return ollama_extracted, False, f"local_ollama ({os.environ.get('OLLAMA_MODEL', 'gemma2')})"
+
+    # Tier 2: Cloud Google GenAI (Gemma 4)
+    if HAS_GENAI and api_key and file_bytes and not use_local_llm:
         try:
             client = genai.Client(api_key=api_key)
-            model = os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it")
+            model_name = os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it")
 
             prompt = f"""
             Domain Mode: {domain_mode} (e.g. 'expense' or 'health_insurance')
@@ -70,7 +162,7 @@ def extract_form_data(file_bytes: bytes, mime_type: str, user_prompt: str, domai
             """
 
             response = client.models.generate_content(
-                model=model,
+                model=model_name,
                 contents=[
                     *([types.Part.from_text(text=user_prompt)] if mime_type == "text/plain" else [types.Part.from_bytes(data=file_bytes, mime_type=mime_type)]),
                     prompt,
@@ -83,9 +175,9 @@ def extract_form_data(file_bytes: bytes, mime_type: str, user_prompt: str, domai
             )
 
             parsed = ClaimExtraction.model_validate_json(response.text)
-            return parsed, False
+            return parsed, False, f"cloud_gemma ({model_name})"
         except Exception as e:
-            print(f"GenAI extraction failed, safely falling back to mock mode. Error: {e}")
+            print(f"GenAI extraction failed: {e}. Trying local or fallback mock.")
 
     # Policy text is not a claim receipt; do not invent sample claim amounts for it.
     if mime_type == "text/plain":
@@ -95,10 +187,15 @@ def extract_form_data(file_bytes: bytes, mime_type: str, user_prompt: str, domai
             items=[],
             total_extracted=0.0,
             confidence_score=0.0,
-        ), True
+        ), True, "offline_mock"
 
-    # Fallback / Mock Mode: always returns True for is_fallback_mock
-    print("Using offline mock mode")
+    # Tier 1.5: If Cloud GenAI failed and we didn't try Ollama yet, try Ollama now
+    if not use_local_llm and file_bytes:
+        ollama_extracted = _extract_via_ollama(file_bytes, user_prompt, domain_mode)
+        if ollama_extracted:
+            return ollama_extracted, False, f"local_ollama ({os.environ.get('OLLAMA_MODEL', 'gemma2')})"
+
+    print("Using offline deterministic mock mode")
     if domain_mode == "health_insurance":
         mock_data = ClaimExtraction(
             provider_name="Apollo Hospitals (MOCKED)",
@@ -126,13 +223,14 @@ def extract_form_data(file_bytes: bytes, mime_type: str, user_prompt: str, domai
             total_extracted=10.00,
             confidence_score=0.95,
         )
-    return mock_data, True
+    return mock_data, True, "offline_mock"
 
 
-def extract_claim_from_pdf_text(policy_text: str, user_prompt: str, domain_mode: str) -> tuple[ClaimExtraction, bool]:
+def extract_claim_from_pdf_text(policy_text: str, user_prompt: str, domain_mode: str) -> tuple[ClaimExtraction, bool, str]:
     """Extract a claim from page-marked PDF text using the existing extraction schema."""
     context = f"{user_prompt}\n\nExtract a claim from this page-marked PDF text.\n{policy_text[:90000]}"
-    return extract_form_data(policy_text.encode("utf-8"), "text/plain", context, domain_mode)
+    extracted, is_mock, model_source = extract_form_data(policy_text.encode("utf-8"), "text/plain", context, domain_mode)
+    return extracted, is_mock, model_source
 
 
 def extract_policy_guide(policy_text: str, claim_json: str) -> PolicyGuide:
