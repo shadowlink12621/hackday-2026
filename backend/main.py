@@ -163,6 +163,11 @@ async def process_request(
         raise HTTPException(status_code=400, detail=f"File size must be {size_limit // (1024 * 1024)} MB or less.")
     if is_pdf and not contents.startswith(b"%PDF"):
         raise HTTPException(status_code=400, detail="The uploaded file is not a valid PDF.")
+    if is_pdf and file.filename.lower().startswith("policy_"):
+        raise HTTPException(
+            status_code=422,
+            detail="This looks like an insurance policy, not a claim bill. Open Policy Navigator to index its pages and ask Gemma about coverage or common claim traps. No claim was saved.",
+        )
 
     if domain_mode not in ALLOWED_DOMAINS:
         raise HTTPException(

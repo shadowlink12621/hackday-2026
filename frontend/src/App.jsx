@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { processDocument, getClaims, getHealth, getModelStatus, saveDecision, getAuditCsv } from './api';
+import { processDocument, getClaims, getHealth, getModelStatus, checkModelConnection, saveDecision, getAuditCsv } from './api';
 import './index.css';
 
 import Header from './components/Header';
@@ -50,7 +50,17 @@ function App() {
 
   const loadModelStatus = async () => {
     try {
-      setModelStatus(await getModelStatus());
+      const status = await getModelStatus();
+      setModelStatus(status);
+      if (status.active_backend === 'cloud_gemma' && status.cloud_gemma_available) {
+        checkModelConnection()
+          .then(() => setModelStatus((current) => current?.cloud_model === status.cloud_model
+            ? { ...current, cloud_connection_verified: true }
+            : current))
+          .catch(() => setModelStatus((current) => current?.cloud_model === status.cloud_model
+            ? { ...current, cloud_connection_verified: false }
+            : current));
+      }
     } catch {
       setModelStatus(null);
     }
@@ -224,7 +234,9 @@ function App() {
         <div className="notice notice-info pdf-notice" role="status">
           <div>
             <strong>PDF detected</strong>
-            <p style={{ margin: '4px 0 0' }}>ClaimGuard reads searchable text across every page. If you enable cloud processing below, Gemma also reads page images and scanned pages.</p>
+            <p style={{ margin: '4px 0 0' }}>{file.name.toLowerCase().startsWith('policy_')
+              ? 'This looks like an insurance policy. Open Policy Navigator to index it and ask Gemma about coverage or common claim traps. Claims Workspace is for bills and receipts.'
+              : 'ClaimGuard reads searchable text across every page. If you enable cloud processing below, Gemma also reads page images and scanned pages.'}</p>
           </div>
         </div>
       )}

@@ -4,7 +4,13 @@ function modelBadge(modelStatus) {
   if (!modelStatus) return { className: 'model-status-unavailable', label: 'AI STATUS UNAVAILABLE', detail: 'Backend model status has not loaded' };
   switch (modelStatus.active_backend) {
     case 'cloud_gemma':
-      return { className: 'model-status-gemma', label: 'CLOUD KEY CONFIGURED', detail: `${modelStatus.cloud_model || 'Google GenAI'} · connection not verified` };
+      if (modelStatus.cloud_connection_verified === true) {
+        return { className: 'model-status-gemma', label: 'CLOUD GEMMA VERIFIED', detail: `${modelStatus.cloud_model || 'Google GenAI'} · live connection check passed` };
+      }
+      if (modelStatus.cloud_connection_verified === false) {
+        return { className: 'model-status-offline', label: 'GEMMA CONNECTION FAILED', detail: `${modelStatus.cloud_model || 'Google GenAI'} · check key, access, and quota` };
+      }
+      return { className: 'model-status-gemma', label: 'CLOUD KEY CONFIGURED', detail: `${modelStatus.cloud_model || 'Google GenAI'} · checking connection` };
     case 'local_ollama':
       return { className: 'model-status-local', label: 'OLLAMA · ONLINE', detail: modelStatus.local_models?.[0] || 'Local model' };
     default:

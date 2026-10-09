@@ -111,6 +111,23 @@ def test_cloud_upload_without_consent_is_not_saved(monkeypatch):
     assert client.get("/api/claims").json() == []
 
 
+def test_policy_named_pdf_is_routed_to_policy_navigator(monkeypatch):
+    from backend import main
+
+    def should_not_extract(*args, **kwargs):
+        raise AssertionError("Policy PDFs must not enter claim extraction")
+
+    monkeypatch.setattr(main, "extract_form_data", should_not_extract)
+    response = client.post(
+        "/api/validate",
+        data={"domain_mode": "health_insurance", "allow_cloud_processing": "true"},
+        files={"file": ("Policy_demo.pdf", b"%PDF-1.4 synthetic policy", "application/pdf")},
+    )
+    assert response.status_code == 422
+    assert "Policy Navigator" in response.json()["detail"]
+    assert client.get("/api/claims").json() == []
+
+
 def test_user_confirmed_reminder_persists_on_case():
     created = client.post("/api/cases", json={"patient_name": "Local Test Patient"})
     case_id = created.json()["case_id"]
