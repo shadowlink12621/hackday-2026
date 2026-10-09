@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field
 from typing import List
+import os
 import re
+from . import llm
 from .llm import generate_json
 
 class Citation(BaseModel):
@@ -77,6 +79,50 @@ def answer(question, evidence=None, allow_cloud_processing=False, history=None, 
     User Question: {question}
     """
 
+    if document_uri and allow_cloud_processing and llm.get_active_tier(True) == "cloud_gemma":
+        try:
+            from google.genai import types
+
+            model = os.environ.get("GEMINI_MODEL") or os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it")
+            client = llm.genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+            response = client.models.generate_content(
+                model=model,
+                contents=[
+                    types.Part.from_uri(file_uri=document_uri, mime_type="application/pdf"),
+                    types.Part.from_text(text=prompt),
+                ],
+            )
+            answer_text = (response.text or "").strip()
+            if not answer_text:
+                raise ValueError("Gemma returned an empty response.")
+            cited_pages = list(dict.fromkeys(
+                int(match) for match in re.findall(r"\[\s*(?:page\s*)?(\d+)\s*\]", answer_text, re.I)
+            ))
+            evidence_by_page = {int(item["page"]): item["text"] for item in evidence if item.get("page")}
+            citations = [
+                {"page": page, "quote": evidence_by_page.get(page, "Cited from the complete policy PDF.")[:600]}
+                for page in cited_pages
+            ]
+            return {
+                "answer": answer_text,
+                "citations": citations,
+                "model_used": f"cloud_gemma ({model})",
+                "is_fallback": False,
+            }
+        except Exception as exc:
+            source_text = _extractive_answer(question, evidence)
+            answer_text = (
+                f"Gemma could not answer from the full policy PDF ({type(exc).__name__}). "
+                "This is a model/API error, not a policy conclusion. Indexed source wording follows:\n\n"
+                f"{source_text.answer}"
+            )
+            return {
+                "answer": answer_text,
+                "citations": [citation.model_dump() for citation in source_text.citations],
+                "model_used": f"cloud_error ({type(exc).__name__})",
+                "is_fallback": True,
+            }
+
     try:
         response_obj, model_used, is_fallback = generate_json(
             prompt, ChatResponse, allow_cloud_processing=allow_cloud_processing,
@@ -92,7 +138,7 @@ def answer(question, evidence=None, allow_cloud_processing=False, history=None, 
         return {
             "answer": answer_text,
             "citations": [citation.model_dump() for citation in source_text.citations],
-            "model_used": f"cloud_error ({type(exc).__name__})",
+        "model_used": f"cloud_error ({type(exc).__name__})",
             "is_fallback": True,
         }
 

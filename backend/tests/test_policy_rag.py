@@ -100,32 +100,49 @@ def test_cloud_policy_chat_requires_explicit_consent_and_respects_zero_env(monke
 
 
 def test_full_pdf_chat_calls_model_even_when_retrieval_misses(monkeypatch):
+    from types import SimpleNamespace
     from backend.policy import chat
 
-    received = {}
+    class FakeModels:
+        calls = []
 
-    def fake_generate(prompt, schema, allow_cloud_processing=False, document_uri=None):
-        received.update(prompt=prompt, consent=allow_cloud_processing, uri=document_uri)
-        return chat.ChatResponse(answer="The policy says 12 months [page 9]."), "cloud_gemma (test)", False
+        def generate_content(self, **kwargs):
+            self.calls.append(kwargs)
+            return SimpleNamespace(text="The specific waiting period is 12 months [Page 9].")
 
-    monkeypatch.setattr(chat, "generate_json", fake_generate)
+    models = FakeModels()
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            self.models = models
+
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setenv("USE_LOCAL_LLM", "0")
+    monkeypatch.setattr(chat.llm, "HAS_GENAI", True)
+    monkeypatch.setattr(chat.llm, "genai", SimpleNamespace(Client=FakeClient))
     result = chat.answer(
         "How long for cataract surgery?", [], True, [],
         document_uri="https://files.example/policy.pdf",
     )
-    assert received["uri"] == "https://files.example/policy.pdf"
-    assert received["consent"] is True
-    assert result["model_used"] == "cloud_gemma (test)"
+    assert models.calls
+    assert models.calls[0]["contents"][0].file_data.file_uri == "https://files.example/policy.pdf"
+    assert result["model_used"].startswith("cloud_gemma")
     assert "12 months" in result["answer"]
+    assert result["citations"][0]["page"] == 9
 
 
 def test_full_pdf_chat_reports_cloud_errors_instead_of_faking_retrieval(monkeypatch):
+    from types import SimpleNamespace
     from backend.policy import chat
 
-    def fail_generate(*args, **kwargs):
-        raise RuntimeError("rate limited")
+    class FakeClient:
+        def __init__(self, **kwargs):
+            self.models = SimpleNamespace(generate_content=lambda **kwargs: (_ for _ in ()).throw(RuntimeError("rate limited")))
 
-    monkeypatch.setattr(chat, "generate_json", fail_generate)
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setenv("USE_LOCAL_LLM", "0")
+    monkeypatch.setattr(chat.llm, "HAS_GENAI", True)
+    monkeypatch.setattr(chat.llm, "genai", SimpleNamespace(Client=FakeClient))
     result = chat.answer("What is the waiting period?", [], True, [], document_uri="file-uri")
     assert result["model_used"] == "cloud_error (RuntimeError)"
     assert "model/API error" in result["answer"]
