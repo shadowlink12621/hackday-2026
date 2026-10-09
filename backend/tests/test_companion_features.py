@@ -106,3 +106,10 @@ def test_insurers_knowledge_endpoints():
     # Non-existent insurer 404
     res_missing = client.get("/api/insurers/unknown_insurer_xyz")
     assert res_missing.status_code == 404
+
+
+def test_insurer_guide_requires_complete_brand_tokens():
+    from backend.knowledge_loader import get_insurer_knowledge
+
+    assert get_insurer_knowledge("Sunrise Care Demo Hospital") is None
+    assert get_insurer_knowledge("Care Health Insurance")["insurer_key"] == "care_health"

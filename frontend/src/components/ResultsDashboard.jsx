@@ -1,10 +1,18 @@
 import React from 'react';
 import ChatInterface from './ChatInterface';
 import AnalyticsChart from './AnalyticsChart';
+import { getCalendarIcsUrl } from '../api';
 
 export default function ResultsDashboard({ result, loading }) {
   const isOffline = result?.metadata?.is_fallback_mock;
   const modelUsed = result?.metadata?.model_used;
+  const sourceLabel = isOffline
+    ? null
+    : modelUsed?.startsWith('cloud_gemma')
+      ? `GEMMA API · ${modelUsed.match(/\((.+)\)/)?.[1] || 'connected model'}`
+      : modelUsed?.startsWith('local_ollama')
+        ? `LOCAL MODEL · ${modelUsed.match(/\((.+)\)/)?.[1] || 'Ollama'}`
+        : modelUsed?.replaceAll('_', ' ').toUpperCase();
 
   return (
     <section className="card results-card">
@@ -16,6 +24,7 @@ export default function ResultsDashboard({ result, loading }) {
         {result && result.metadata && result.metadata.is_fallback_mock && (
           <div className="mock-tag">{result.metadata.document_type === 'policy_document' ? 'KEYWORD SCAN' : 'OFFLINE · NOT EXTRACTED'}</div>
         )}
+        {result && sourceLabel && <div className="model-source-tag" title={`Extraction source: ${modelUsed}`}>{sourceLabel}</div>}
       </div>
       
       {!result && !loading && (
@@ -54,7 +63,7 @@ export default function ResultsDashboard({ result, loading }) {
           {result.claim_id && (
             <div style={{ margin: '12px 0 16px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <a
-                href={`http://localhost:8000/api/claims/${result.claim_id}/calendar.ics`}
+                href={getCalendarIcsUrl(result.claim_id)}
                 download={`claimguard_deadline_${result.claim_id}.ics`}
                 style={{
                   display: 'inline-flex',

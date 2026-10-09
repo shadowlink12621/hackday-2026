@@ -198,7 +198,7 @@ def extract_pdf_image_text(
     if not (HAS_GENAI and api_key) or os.environ.get("USE_LOCAL_LLM", "").lower() in ("1", "true", "yes"):
         raise CloudModelError("Scanned PDF pages need an enabled Gemma connection and consent to cloud processing.")
 
-    client = genai.Client(api_key=api_key)
+    client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=45_000))
     model = _cloud_model_name()
     page_text: dict[int, list[str]] = {}
     batch_size = 4
@@ -397,7 +397,7 @@ def extract_form_data(
     # Tier 2: Cloud Google GenAI (Gemma 4 multimodal extraction)
     if not force_mock and HAS_GENAI and api_key and has_content and not use_local_llm and allow_cloud_processing:
         try:
-            client = genai.Client(api_key=api_key)
+            client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=45_000))
             model_name = _cloud_model_name()
 
             if pdf_images:
@@ -473,6 +473,10 @@ def extract_form_data(
             return parsed, False, f"cloud_gemma ({model_name})"
         except Exception as e:
             print(f"Gemma extraction failed ({type(e).__name__}): {e}")
+            if "resource_exhausted" in str(e).lower() or "quota" in str(e).lower():
+                raise CloudModelError(
+                    "Gemma's API quota was exceeded for this request. A long policy document may exceed the available input-token allowance; use Policy Navigator to search relevant passages. No mock result was created."
+                ) from e
             raise CloudModelError(
                 "Gemma could not analyze this file. Check the API key, model access, and backend logs, then try again. No mock result was created."
             ) from e

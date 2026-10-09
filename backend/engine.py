@@ -350,9 +350,9 @@ def run_deterministic_checks(
             for trap in insurer_info.get("key_traps", [])[:2]:
                 results.append(
                     RuleResult(
-                        rule_name=f"Policy Advisory ({insurer_info['title']})",
+                        rule_name=f"Built-in Insurer Guide ({insurer_info['title']})",
                         passed=True,
-                        message=f"💡 Important: {trap}",
+                        message=f"Reference guidance only; not extracted from this upload. {trap}",
                     )
                 )
 

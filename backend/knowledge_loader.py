@@ -1,6 +1,7 @@
 """Knowledge base loader for insurer policies, sub-limits, and common claim traps."""
 
 import os
+import re
 from typing import Any, Dict, List, Optional
 
 KNOWLEDGE_DIR = os.path.join(os.path.dirname(__file__), "knowledge")
@@ -24,14 +25,16 @@ def get_insurer_knowledge(insurer_query: str) -> Optional[Dict[str, Any]]:
     if not os.path.exists(KNOWLEDGE_DIR) or not insurer_query:
         return None
 
-    query_lower = insurer_query.lower()
+    query_terms = set(re.findall(r"[a-z0-9]+", insurer_query.lower()))
     target_file = None
 
     for fname in os.listdir(KNOWLEDGE_DIR):
         if not fname.endswith(".md"):
             continue
-        key = fname[:-3].lower()
-        if key in query_lower or any(part in query_lower for part in key.split("_")):
+        key_terms = [part for part in fname[:-3].lower().split("_") if part]
+        # Match complete brand tokens. Substring matching made a hospital
+        # called "Sunrise Care" inherit the unrelated Care Health guide.
+        if key_terms and all(part in query_terms for part in key_terms):
             target_file = os.path.join(KNOWLEDGE_DIR, fname)
             break
 

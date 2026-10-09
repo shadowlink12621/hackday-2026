@@ -264,6 +264,16 @@ button, select {
   background: rgba(255, 209, 102, 0.1);
 }
 
+.model-source-tag {
+  border: 1px solid rgba(45, 212, 191, 0.32);
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: #76f5cf;
+  background: rgba(45, 212, 191, 0.08);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
 /* Forms & Inputs */
 .field-label {
   display: block;
