@@ -1031,6 +1031,34 @@ tbody tr:hover td { background: rgba(255, 255, 255, 0.02); }
   cursor: not-allowed;
 }
 
+/* Policy chat: cited Q&A that follows the existing emerald palette. */
+.policy-chat-card { margin-top: 16px; padding: 22px; }
+.policy-chat-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.policy-chat-heading h3 { margin: 5px 0 4px; color: #fff; font: 700 18px Manrope, sans-serif; }
+.policy-chat-heading p { margin: 0; color: #91a5a8; font-size: 12px; line-height: 1.5; }
+.policy-chat-empty { padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: rgba(0, 0, 0, .18); color: #dce8e6; }
+.policy-question-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.policy-question-chips button { padding: 8px 11px; border: 1px solid rgba(0, 255, 179, .2); border-radius: 999px; background: rgba(0, 255, 179, .06); color: #c7ded8; font-size: 11px; cursor: pointer; }
+.policy-question-chips button:hover:not(:disabled) { border-color: var(--teal); color: #fff; }
+.policy-question-chips button:disabled { opacity: .55; cursor: wait; }
+.policy-chat-messages { max-height: 340px; padding: 3px 2px 12px; }
+.policy-chat-citations { display: grid; gap: 6px; margin-top: 10px; }
+.policy-chat-citation { padding: 8px 10px; border: 1px solid rgba(0, 255, 179, .17); border-radius: 8px; background: rgba(0, 0, 0, .18); color: #c8d8d5; }
+.policy-chat-citation summary { color: var(--teal); font-size: 11px; font-weight: 700; cursor: pointer; }
+.policy-chat-citation p { margin: 7px 0 0; color: #aebfbc; font-size: 11px; }
+.policy-chat-source, .policy-chat-disclaimer { display: block; margin-top: 9px; color: #91a5a8; font-size: 10px; line-height: 1.5; }
+.policy-chat-thinking { align-self: flex-start; padding: 8px 12px; color: var(--teal); font-size: 11px; }
+.policy-chat-error { border-color: rgba(255, 77, 77, .28); }
+.policy-chat-form { margin-top: 12px; }
+
+@media (max-width: 600px) {
+  .policy-chat-card { padding: 16px; }
+  .policy-chat-heading { flex-direction: column; }
+  .policy-chat-heading .policy-guide-tag { align-self: flex-start; }
+  .policy-chat-form { flex-direction: column; }
+  .policy-chat-form button { min-height: 40px; }
+}
+
 /* Responsive */
 @media (max-width: 900px) {
   .work-grid { grid-template-columns: 1fr; }

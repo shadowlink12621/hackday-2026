@@ -1,48 +1,105 @@
 import React, { useState } from 'react';
 import { chatCase } from '../api';
 
+const SUGGESTED_QUESTIONS = [
+  'What is the cataract waiting period?',
+  'What does the policy say about room rent?',
+  'Are refractive error treatments excluded?',
+];
+
 export default function CaseChat({ caseId }) {
   const [q, setQ] = useState('');
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const handleAsk = async (e) => {
-    e.preventDefault();
-    if (!q) return;
+  const askQuestion = async (question) => {
+    const cleanQuestion = question.trim();
+    if (!cleanQuestion || loading) return;
+
     setLoading(true);
-    setHistory([...history, { role: 'user', text: q }]);
-    try {
-      const res = await chatCase(caseId, q);
-      setHistory(h => [...h, { role: 'ai', text: res.answer, citations: res.citations, is_fallback: res.is_fallback }]);
-    } catch (err) {
-      setHistory(h => [...h, { role: 'ai', text: 'Error connecting to chat.', error: true }]);
-    }
     setQ('');
-    setLoading(false);
+    setHistory((items) => [...items, { role: 'user', text: cleanQuestion }]);
+    try {
+      const res = await chatCase(caseId, cleanQuestion);
+      setHistory((items) => [...items, {
+        role: 'ai',
+        text: res.answer,
+        citations: res.citations || [],
+        isFallback: res.is_fallback || res.model_used === 'offline_mock' || res.model_used === 'retrieval_only',
+      }]);
+    } catch (err) {
+      setHistory((items) => [...items, {
+        role: 'ai',
+        text: err.message || 'Could not reach the policy assistant. Please try again.',
+        error: true,
+      }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAsk = (event) => {
+    event.preventDefault();
+    askQuestion(q);
   };
 
   return (
-    <div className="card" style={{ padding: '20px', marginTop: '16px', background: 'rgba(0,0,0,0.4)' }}>
-      <h3 style={{ margin: '0 0 12px', color: '#fff' }}>Policy AI Assistant</h3>
-      <div style={{ maxHeight: '300px', overflowY: 'auto', marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {history.map((msg, i) => (
-          <div key={i} style={{ alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', background: msg.role === 'user' ? '#0d6efd' : '#2a2d35', padding: '12px', borderRadius: '12px', maxWidth: '85%', color: '#fff' }}>
-            <div style={{ fontSize: '14px', lineHeight: '1.5' }}>{msg.text}</div>
-            {msg.citations?.length > 0 && (
-              <div style={{ marginTop: '8px', display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                {msg.citations.map((c, ci) => (
-                  <span key={ci} style={{ fontSize: '11px', background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: '4px' }} title={c.quote}>p.{c.page}</span>
-                ))}
-              </div>
-            )}
-            {msg.is_fallback && <div style={{ fontSize: '10px', color: '#f39c12', marginTop: '4px' }}>DEMO CACHE</div>}
-          </div>
-        ))}
+    <section className="card policy-chat-card" aria-labelledby="policy-chat-title">
+      <div className="policy-chat-heading">
+        <div>
+          <div className="eyebrow">SOURCE-BASED Q&amp;A</div>
+          <h3 id="policy-chat-title">Ask this policy</h3>
+          <p>Get answers from indexed policy wording, with page references.</p>
+        </div>
+        <span className="policy-guide-tag">POLICY ASSISTANT</span>
       </div>
-      <form onSubmit={handleAsk} style={{ display: 'flex', gap: '8px' }}>
-        <input type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="e.g. Is cataract covered for me?" style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: '#fff' }} />
-        <button type="submit" className="primary-button" style={{ margin: 0, width: 'auto', padding: '0 20px' }} disabled={loading}>{loading ? '...' : 'Ask'}</button>
+
+      {history.length === 0 ? (
+        <div className="policy-chat-empty">
+          <strong>What would you like to check?</strong>
+          <div className="policy-question-chips">
+            {SUGGESTED_QUESTIONS.map((suggestion) => (
+              <button key={suggestion} type="button" onClick={() => askQuestion(suggestion)} disabled={loading}>
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="chat-messages policy-chat-messages" aria-live="polite">
+          {history.map((msg, index) => (
+            <article className={`chat-bubble ${msg.role === 'user' ? 'chat-user' : 'chat-ai'}${msg.error ? ' policy-chat-error' : ''}`} key={`${msg.role}-${index}`}>
+              <strong>{msg.role === 'user' ? 'You' : 'Policy guide'}</strong>
+              <p>{msg.text}</p>
+              {msg.citations?.length > 0 && (
+                <div className="policy-chat-citations">
+                  {msg.citations.map((citation, citationIndex) => (
+                    <details className="policy-chat-citation" key={`${citation.page}-${citationIndex}`}>
+                      <summary>Source · page {citation.page}</summary>
+                      {citation.quote && <p>{citation.quote}</p>}
+                    </details>
+                  ))}
+                </div>
+              )}
+              {msg.isFallback && <small className="policy-chat-source">Retrieved from indexed policy text</small>}
+            </article>
+          ))}
+          {loading && <div className="policy-chat-thinking" role="status">Checking relevant policy pages…</div>}
+        </div>
+      )}
+
+      <form onSubmit={handleAsk} className="chat-input-form policy-chat-form">
+        <input
+          type="text"
+          value={q}
+          onChange={(event) => setQ(event.target.value)}
+          placeholder="Ask about a limit, exclusion, or waiting period…"
+          aria-label="Ask a question about this policy"
+          disabled={loading}
+        />
+        <button type="submit" disabled={loading || !q.trim()}>{loading ? 'Checking…' : 'Ask'}</button>
       </form>
-    </div>
+      <small className="policy-chat-disclaimer">Guidance only. Confirm coverage and limits against your active policy schedule.</small>
+    </section>
   );
 }
