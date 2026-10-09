@@ -1,79 +1,101 @@
 # ClaimGuard Master Project Tracker
 
-This is the shared checklist for the Hack Day team. Check the current branch and working tree before each iteration.
+This is the unified project tracking board for the ClaimGuard team.
 
-## Person A — Backend, AI, and Integration
+---
+
+## Strategic Product Architecture: ClaimGuard — Your Claims Companion & Benefit Navigator
+- **Core Promise**: Know what your policy says, what your documents prove, what may be missing, and what to do next — with evidence for every important result.
+- **Differentiator**: Structured verification pipeline (Multimodal Gemma 4 extraction + Local Insurer Knowledge + Deterministic Python rules + Calendar Reminders + ScamCheck + Interactive Gemma 4 Claim Chat).
+
+---
+
+## Person A — Backend, AI, Engine & Integration (Branch: `feat/core-ai`)
 
 ### Stage 1: Core Perception and Validation Engine
-
-- [x] Build the FastAPI application and Gemini extraction client.
+- [x] Build the FastAPI application and Gemini/Gemma extraction client.
 - [x] Support corporate expense and health insurance domains.
-- [x] Implement deterministic math, currency, policy, and duplicate-image checks.
+- [x] Implement deterministic math, currency, policy, and duplicate-image SHA-256 checks.
 - [x] Add Pydantic extraction and validation schemas with a working fallback mode.
 - [x] Write baseline engine tests and the Agent Skill.
 
 ### Stage 2: Storage and Workflow APIs
-
-- [x] Persist claims and expose the claims history API.
-- [x] Add manager approve/reject decisions.
-- [x] Add the CSV audit export endpoint.
-- [x] Standardize the upload contract on `POST /api/validate` with `perception` and `validation` response fields.
+- [x] Persist claims in SQLite and expose the claims history API (`GET /api/claims`).
+- [x] Add manager approve/reject decisions (`POST /api/claims/{id}/decision`).
+- [x] Add the CSV audit export endpoint with formula-injection sanitization (`GET /api/export.csv`).
+- [x] Standardize upload contract on `POST /api/validate` returning `perception` and `validation`.
 
 ### Stage 3: Hardening and Edge Cases
-
 - [x] Reject files over 5 MB and unsupported MIME types at the validation endpoint.
-- [x] Handle transient SQLite lock errors with retry and a clear API error response.
-- [x] Test health, validation, claims, decisions, CSV export, and lock retry behavior.
+- [x] Handle transient SQLite lock errors with WAL mode and retry decorator.
+- [x] Test health, validation, claims, decisions, CSV export, and lock retry behavior (21/21 tests passing).
 - [x] Clean up backend code and verify fallback behavior.
 
-### Stage 4: Local Docker Deployment
+### Stage 4: Companion Features & Local Knowledge
+- [x] **Local Insurer Knowledge Base**: Build markdown knowledge base (`backend/knowledge/`) for HDFC ERGO, Star Health, Niva Bupa, Care Health, ICICI Lombard, and SBI General with real-world claim repudiation traps (lifestyle/smoking disclosures, room rent proportional deductions, 15-bed minimums, consumables exclusions).
+- [x] **Benefit & Deadline Calendar Engine**: Generate RFC 5545 `.ics` reminders (`GET /api/claims/{id}/calendar.ics`); generic intervals are now labeled provisional, not statutory or policy deadlines.
+- [x] **ScamCheck Engine**: Analyze SMS, email, and WhatsApp messages for insurance refund fee extortion (`POST /api/scamcheck`) referencing IRDAI Bima Bharosa warnings.
+- [x] **Hybrid Gemma Architecture**: Support Cloud Gemma 4, Local Ollama open-source Gemma (`http://localhost:11434`), and offline structured mock fallback with `GET /api/model/status`.
+- [x] **Interactive Claim Chat**: Add `POST /api/chat` to allow conversational Q&A with Gemma about specific audited claims.
+- [x] **Developer Scripts**:
+  - `backend/scripts/seed_demo_claims.py`: Idempotent seeder with 4 realistic claims.
+  - `backend/scripts/validate_insurer_knowledge.py`: Validates all 6 insurer trap files.
+  - `backend/scripts/benchmark_gemma.py`: Multi-tier benchmark utility for Gemma.
+  - `backend/scripts/validate_cli.py`: Standalone CLI claim validator.
 
-- [x] Add a Python 3.11 backend image that serves the API on port 8000.
-- [x] Load `GEMINI_API_KEY` from the local Compose environment without committing secrets.
-- [x] Persist the SQLite database through the Compose data volume.
-- [x] Add a backend health check for Compose startup ordering.
+### Stage 5: User Policy Ingestion & Evidence Chat
+- [x] Add bounded PDF ingestion and page-by-page text extraction in `backend/policy_store.py`.
+- [x] Store extracted policy text locally; deduplicate repeat uploads and do not retain source PDF bytes.
+- [x] Add retrieval-backed profile and policy chat APIs with page citations.
+- [x] Keep offline replies extractive and explicit when no language model is available.
+- [x] Add redacted policy UI fixture and detailed Person B handoff.
+- [x] Complete backend test suite (25 passed) and verify upload/chat against the local 59-page sample in a temporary database.
+- [ ] Person B implements policy upload/profile cards, citation chat, model mode, and reminder UI on `feat/frontend`.
 
-## Person B — Frontend, Browser Testing, and Deployment
+---
+
+## Person B — Frontend, Browser Testing, and Deployment (Branch: `feat/frontend`)
 
 ### Stage 1: Frontend Scaffold and API-Connected UI
-
 - [x] Build the React/Vite claim upload interface with expense and health insurance modes.
 - [x] Render extracted claim details, policy checks, and validation status.
-- [x] Organize the interface into reusable upload, results, history, and header components.
+- [x] Organize interface into reusable components (`UploadZone`, `ResultsDashboard`, `HistoryTable`, `Header`, `ErrorBoundary`, `AnalyticsChart`, `ChatInterface`).
 
-### Stage 2: Claims Workflow
-
-- [x] Load and display claim history.
-- [x] Add manager approve/reject actions.
-- [x] Add CSV audit export.
-- [x] Align the frontend request and response handling with the backend contract.
+### Stage 2: Claims Workflow & Analytics Dashboard
+- [x] Load and display claim history in real-time.
+- [x] Add manager approve/reject actions with visual status badges.
+- [x] Add CSV audit export download button.
+- [x] Interactive Recharts analytics breakdown of claims.
+- [x] Gemma 4 interactive chat interface for claim inquiries.
 
 ### Stage 3: Browser E2E Testing
-
 - [x] Configure Playwright to run the frontend locally in Chromium.
 - [x] Test an approved corporate expense and a flagged health insurance claim with mocked API responses.
 - [x] Test CSV download and display of backend validation errors.
-- [x] Run the four Playwright flows successfully.
+- [x] Run Playwright flows successfully.
 
 ### Stage 4: Local Docker Deployment
+- [x] Add multi-stage frontend Dockerfile (Vite build + static server on port 5173).
+- [x] Add backend Dockerfile (Python 3.11 on port 8000).
+- [x] Add `docker-compose.yml` with persistent volume and health check.
+- [x] Add DigitalOcean App Platform deployment configuration (`do-app.yaml`).
 
-- [x] Add a multi-stage frontend image that builds Vite and serves the static app on port 5173.
-- [x] Add Docker Compose services for the frontend and backend, including the API base URL and persistent claim data.
-- [x] Add `.dockerignore` rules to exclude local secrets, dependency folders, generated assets, and databases.
-- [x] Document the local launch command and `.env` setup below.
+---
 
-## Companion Features
+## How to Run the Unified Application
 
-- [x] Add the Benefit Calendar UI with claim-specific `.ics` downloads.
-- [x] Add ScamCheck with a risk score, red flags, and IRDAI guidance.
-- [x] Add insurer knowledge cards with claim gotchas and official portal links.
-- [x] Add a live Cloud Gemma / Local Ollama / Offline model status badge.
-- [x] Add Gemma extraction benchmarking, CLI validation, and insurer knowledge validation utilities.
+### Local Development (Recommended)
+1. **Backend**:
+   ```bash
+   python -m uvicorn backend.main:app --reload --port 8000
+   ```
+2. **Frontend**:
+   ```bash
+   npm --prefix frontend run dev
+   ```
+3. Open `http://localhost:5173` in your browser. Backend healthcheck is at `http://localhost:8000/api/health`.
 
-## Run the Local Demo
-
-1. Copy `.env.example` to `.env` and add `GEMINI_API_KEY` if live Gemini extraction is desired. Leave it blank to use the backend fallback.
-2. Run `docker compose up --build` from the repository root.
-3. Open the frontend at `http://localhost:5173`; the backend health endpoint is at `http://localhost:8000/api/health`.
-
-The Docker configuration is prepared. The Docker engine was unavailable in the Codex environment, so the containers still need to be launched locally to verify the runtime.
+### Docker Deployment
+```bash
+docker compose up --build
+```

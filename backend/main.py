@@ -11,7 +11,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
-import pymupdf
 from .engine import (
     analyze_insurance_message,
     generate_claim_calendar_ics,
@@ -21,12 +20,13 @@ from .engine import (
     save_claim,
     update_claim_decision,
 )
-from .gemma_client import extract_claim_from_pdf_text, extract_form_data, extract_policy_guide, chat_with_claim
+from .gemma_client import extract_form_data, get_model_status, chat_with_claim
 from .knowledge_loader import get_insurer_knowledge, list_known_insurers
+from .policy_store import MAX_POLICY_PDF_BYTES, get_policy, ingest_policy_pdf, retrieve_policy_pages
+from .gemma_client import answer_with_policy
 
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png"}
-ALLOWED_DOCUMENT_TYPES = ALLOWED_IMAGE_TYPES | {"application/pdf"}
 ALLOWED_DOMAINS = {"expense", "health_insurance"}
 
 app = FastAPI(title="ClaimGuard Enterprise API")
@@ -51,31 +51,6 @@ def sanitize_csv_cell(value: Any) -> str:
     return text
 
 
-def extract_pdf_text(contents: bytes, max_chars: int = 90000) -> tuple[str, int]:
-    """Read searchable text from a PDF, retaining source page markers."""
-    try:
-        document = pymupdf.open(stream=contents, filetype="pdf")
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail="This PDF could not be opened. Please upload a valid PDF.") from exc
-
-    pages = []
-    char_count = 0
-    for page_number, page in enumerate(document, start=1):
-        text = re.sub(r"\s+", " ", page.get_text("text")).strip()
-        if not text:
-            continue
-        marker = f"[PAGE {page_number}] "
-        remaining = max_chars - char_count
-        if remaining <= len(marker):
-            break
-        text = text[:remaining - len(marker)]
-        pages.append(marker + text)
-        char_count += len(marker) + len(text)
-        if char_count >= max_chars:
-            break
-    return "\n".join(pages), len(document)
-
-
 @app.exception_handler(sqlite3.OperationalError)
 async def handle_sqlite_operational_error(request: Request, exc: sqlite3.OperationalError):
     return JSONResponse(
@@ -92,8 +67,6 @@ def health_check():
 @app.get("/api/model/status")
 def model_status():
     """Returns runtime AI model connectivity (Cloud Gemma vs Local Ollama vs Offline Mock)."""
-    from .gemma_client import get_model_status
-
     return get_model_status()
 
 
@@ -114,10 +87,8 @@ async def process_request(
         raise HTTPException(status_code=400, detail="Uploaded file cannot be empty.")
 
     mime_type = file.content_type or "application/octet-stream"
-    if mime_type == "application/octet-stream" and file.filename.lower().endswith(".pdf"):
-        mime_type = "application/pdf"
-    if mime_type not in ALLOWED_DOCUMENT_TYPES:
-        raise HTTPException(status_code=400, detail="Only JPEG, PNG, and searchable PDF files are supported.")
+    if mime_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail="Only JPEG and PNG images are supported.")
     if len(contents) > MAX_FILE_SIZE_BYTES:
         raise HTTPException(status_code=400, detail="File size must be 5 MB or less.")
 
@@ -138,65 +109,15 @@ async def process_request(
                 detail="Invalid rule_settings: must be a valid JSON object string.",
             )
 
-    policy_text = ""
-    policy_page_count = 0
-    if mime_type == "application/pdf":
-        policy_text, policy_page_count = await run_in_threadpool(extract_pdf_text, contents)
-        if not policy_text:
-            raise HTTPException(
-                status_code=400,
-                detail="No searchable text was found in this PDF. OCR is not enabled; upload a text-based PDF or clear page images.",
-            )
-        is_policy_document = bool(re.search(
-            r"group mediclaim policy|certificate of insurance|policy /certificate no|coverage details",
-            policy_text[:16000],
-            re.IGNORECASE,
-        ))
-        if is_policy_document:
-            guide = await run_in_threadpool(extract_policy_guide, policy_text, "No individual claim submitted; summarize this policy for a member preparing a claim.")
-            return {
-                "metadata": {
-                    "model_used": os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it"),
-                    "is_fallback_mock": guide.source != "gemma",
-                    "latency_ms": int((time.time() - start_time) * 1000),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "domain": domain_mode,
-                    "document_type": "policy_document",
-                },
-                "perception": {
-                    "structured_data": {
-                        "provider_name": "Insurance policy",
-                        "patient_or_employee_name": None,
-                        "date_extracted": None,
-                        "currency": "INR",
-                        "items": [],
-                        "total_extracted": 0,
-                        "confidence_score": 0,
-                    },
-                    "confidence": 0,
-                },
-                "validation": {"is_valid": False, "final_amount_inr": 0, "results": []},
-                "policy_guide": {
-                    **guide.model_dump(),
-                    "page_count": policy_page_count,
-                    "extraction_mode": "text",
-                },
-            }
-
-    if mime_type == "application/pdf":
-        extracted_data, is_mock, model_source = await run_in_threadpool(
-            extract_claim_from_pdf_text, policy_text, prompt or "", domain_mode
-        )
-    else:
-        extracted_data, is_mock, model_source = await run_in_threadpool(
-            extract_form_data, contents, mime_type, prompt or "", domain_mode
-        )
+    extracted_data, is_mock, model_source = await run_in_threadpool(
+        extract_form_data, contents, mime_type, prompt or "", domain_mode
+    )
     validation_result = run_deterministic_checks(extracted_data, contents, rule_settings, domain_mode)
 
     claim_id = save_claim(domain_mode, extracted_data, validation_result)
     latency_ms = int((time.time() - start_time) * 1000)
 
-    response_data = {
+    return {
         "claim_id": claim_id,
         "metadata": {
             "model_used": model_source,
@@ -211,18 +132,6 @@ async def process_request(
         },
         "validation": validation_result.model_dump(),
     }
-    if policy_text:
-        guide = await run_in_threadpool(
-            extract_policy_guide,
-            policy_text,
-            json.dumps(extracted_data.model_dump()),
-        )
-        response_data["policy_guide"] = {
-            **guide.model_dump(),
-            "page_count": policy_page_count,
-            "extraction_mode": "text",
-        }
-    return response_data
 
 
 @app.get("/api/claims")
@@ -275,6 +184,44 @@ async def chat_endpoint(payload: ChatRequest):
     
     answer = await run_in_threadpool(chat_with_claim, json.dumps(claim), payload.question)
     return {"answer": answer}
+
+
+@app.post("/api/policies")
+async def upload_policy(file: UploadFile = File(...)):
+    """Extract and index a policy PDF locally without retaining the original file."""
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Upload a PDF policy document.")
+    contents = await file.read(MAX_POLICY_PDF_BYTES + 1)
+    if len(contents) > MAX_POLICY_PDF_BYTES:
+        raise HTTPException(status_code=413, detail="Policy PDF must be 20 MB or smaller.")
+    try:
+        return ingest_policy_pdf(contents, file.filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/api/policies/{policy_id}")
+def read_policy(policy_id: int):
+    policy = get_policy(policy_id)
+    if not policy:
+        raise HTTPException(status_code=404, detail=f"Policy {policy_id} not found.")
+    return policy
+
+
+class PolicyQuestion(BaseModel):
+    question: str
+
+
+@app.post("/api/policies/{policy_id}/chat")
+async def ask_policy(policy_id: int, payload: PolicyQuestion):
+    if not payload.question.strip():
+        raise HTTPException(status_code=400, detail="Question is required.")
+    policy = get_policy(policy_id)
+    if not policy:
+        raise HTTPException(status_code=404, detail=f"Policy {policy_id} not found.")
+    evidence = retrieve_policy_pages(policy_id, payload.question)
+    result = await run_in_threadpool(answer_with_policy, payload.question, evidence)
+    return {"policy": policy, **result}
 
 class ScamCheckRequest(BaseModel):
     message_text: str

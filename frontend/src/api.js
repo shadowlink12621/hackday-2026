@@ -162,3 +162,30 @@ export async function sendChat(claimId, question) {
   return response.json();
 }
 
+export async function checkScamMessage(messageText) {
+  const response = await request('/scamcheck', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message_text: messageText }),
+  });
+  return response.json();
+}
+
+export async function getInsurers() {
+  const response = await request('/insurers');
+  return response.json();
+}
+
+export async function getInsurerDetails(insurerKey) {
+  const response = await request(`/insurers/${encodeURIComponent(insurerKey)}`);
+  return response.json();
+}
+
+export async function getModelStatus() {
+  const response = await request('/model/status');
+  return response.json();
+}
+
+export function getCalendarIcsUrl(claimId) {
+  return `${API}/claims/${encodeURIComponent(claimId)}/calendar.ics`;
+}

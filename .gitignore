@@ -44,3 +44,6 @@ node_modules/
 .idea/
 
 *.db
+
+# Private uploaded policies
+Policy_*.pdf

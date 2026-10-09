@@ -39,8 +39,9 @@ def test_calendar_ics_download():
     ics_text = res.text
     assert "BEGIN:VCALENDAR" in ics_text
     assert "END:VCALENDAR" in ics_text
-    assert "ClaimGuard Deadline" in ics_text
-    assert "30-day rule" in ics_text
+    assert "verify document deadline" in ics_text
+    assert "not a universal or statutory cutoff" in ics_text
+    assert "Provisional 7-day follow-up reminder" in ics_text
 
 
 def test_calendar_ics_not_found():
