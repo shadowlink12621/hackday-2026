@@ -7,6 +7,7 @@ import UploadZone from './components/UploadZone';
 import ResultsDashboard from './components/ResultsDashboard';
 import HistoryTable from './components/HistoryTable';
 import ErrorBoundary from './components/ErrorBoundary';
+import FeatureShaderCards from './components/ui/feature-shader-cards';
 
 function App() {
   const [file, setFile] = useState(null);
@@ -148,6 +149,7 @@ function App() {
             loading={loading} 
           />
         </div>
+        <FeatureShaderCards />
       </main>
     </ErrorBoundary>
   );

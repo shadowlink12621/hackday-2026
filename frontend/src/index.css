@@ -739,6 +739,35 @@ tbody tr:hover td { background: rgba(255, 255, 255, 0.02); }
 .policy-guide-empty, .policy-guide-note { color: #91a5a8; font-size: 11px; line-height: 1.5; }
 .policy-guide-note { display: block; margin-top: 16px; }
 
+/* Shader-backed ClaimGuard capability cards */
+.shader-features {
+  content-visibility: auto;
+  contain-intrinsic-size: 900px;
+  margin: 72px 0 24px;
+}
+.shader-features-heading { max-width: 760px; margin: 0 auto 30px; text-align: center; }
+.shader-features-heading h2 { margin: 10px 0; color: #f2fbf8; font: 700 clamp(25px, 3vw, 36px) Manrope, sans-serif; letter-spacing: -.6px; }
+.shader-features-heading p { margin: 0; color: #9eb1b2; font-size: 14px; line-height: 1.7; }
+.shader-features-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.shader-feature-card {
+  position: relative;
+  min-height: 280px;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid rgba(98, 214, 179, .2);
+  border-radius: 18px;
+  background: #071512;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .18);
+}
+.shader-feature-background { position: absolute; z-index: -2; inset: 0; overflow: hidden; opacity: .8; }
+.shader-feature-background canvas { display: block; }
+.shader-feature-card::after { position: absolute; z-index: -1; inset: 0; content: ''; background: linear-gradient(145deg, rgba(2, 10, 9, .76), rgba(2, 10, 9, .88) 64%, rgba(2, 10, 9, .94)); }
+.shader-feature-content { display: flex; min-height: 280px; flex-direction: column; padding: 24px; }
+.shader-feature-icon { display: grid; width: 48px; height: 48px; place-items: center; margin-bottom: 22px; border: 1px solid rgba(0, 255, 179, .25); border-radius: 14px; background: rgba(0, 255, 179, .08); color: #50f2bd; }
+.shader-feature-icon svg { width: 25px; height: 25px; }
+.shader-feature-content h3 { margin: 0 0 10px; color: #f6fffb; font: 700 17px Manrope, sans-serif; }
+.shader-feature-content p { margin: 0; color: #c0cecc; font-size: 13px; line-height: 1.7; }
+
 /* History Section */
 .history-card {
   padding: 24px 32px;
@@ -928,6 +957,7 @@ tbody tr:hover td { background: rgba(255, 255, 255, 0.02); }
   .work-grid { grid-template-columns: 1fr; }
   .dropzone { min-height: 180px; }
   .results-card { min-height: 400px; }
+  .shader-features-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 600px) {
@@ -941,4 +971,7 @@ tbody tr:hover td { background: rgba(255, 255, 255, 0.02); }
   .summary-grid { grid-template-columns: 1fr; }
   .policy-guide { padding: 16px; }
   .policy-guide-columns { grid-template-columns: 1fr; }
+  .shader-features { margin-top: 48px; }
+  .shader-features-grid { grid-template-columns: 1fr; gap: 14px; }
+  .shader-feature-card, .shader-feature-content { min-height: 250px; }
 }
