@@ -76,7 +76,7 @@ source .venv/bin/activate
 pip install -r backend/requirements.txt
 
 # Copy .env.example to .env and set GEMINI_API_KEY locally.
-# GEMINI_MODEL defaults to gemini-2.5-flash. Never commit .env.
+# GEMINI_MODEL defaults to gemma-4-26b-a4b-it. Never commit .env.
 
 # Start FastAPI server
 python -m uvicorn backend.main:app --reload --port 8000

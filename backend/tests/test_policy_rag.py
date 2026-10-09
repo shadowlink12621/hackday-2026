@@ -33,10 +33,12 @@ def test_ingest_policy_and_page_retrieval(monkeypatch):
         lambda _: SimpleNamespace(pages=[
             FakePage("Policy schedule. OPD cover is INR 3000 per family."),
             FakePage("Specific waiting period: cataract is 12 months."),
+            FakePage(""),
         ]),
     )
     saved = policy_store.ingest_policy_pdf(b"%PDF demo bytes", "demo-policy.pdf")
-    assert saved["page_count"] == 2
+    assert saved["page_count"] == 3
+    assert saved["unreadable_pages"] == [3]
     assert saved["insurer"] is None
     assert policy_store.ingest_policy_pdf(b"%PDF demo bytes", "renamed.pdf")["duplicate_upload"] is True
 
@@ -44,6 +46,9 @@ def test_ingest_policy_and_page_retrieval(monkeypatch):
     assert matches[0]["page"] == 2
     profile = policy_store.get_policy(saved["policy_id"])
     assert profile["profile"]
+    assert profile["unreadable_pages"] == [3]
+    assert "summary" not in profile
+    assert "sections" not in profile
 
 
 def test_policy_upload_rejects_non_pdf():
@@ -144,6 +149,18 @@ def test_policy_summary_is_source_only_without_consent(monkeypatch):
     assert result["model_used"] == "retrieval_only"
 
 
+def test_policy_summary_refuses_to_claim_complete_analysis_with_unreadable_pages():
+    from backend import gemma_client
+
+    result = gemma_client.summarize_policy_pages(
+        [{"page": 1, "text": "Readable wording"}, {"page": 2, "text": ""}],
+        allow_cloud_processing=True,
+    )
+    assert result["summary"] is None
+    assert result["model_used"] == "ocr_required"
+    assert "pages 2" in result["detail"]
+
+
 def test_generated_policy_summary_filters_unknown_citation_pages(monkeypatch):
     import json
     from backend import gemma_client
@@ -192,3 +209,54 @@ def test_policy_excerpt_redacts_personal_names_and_contacts():
     assert "ANANYA SHARMA" not in excerpt
     assert "9876543210" not in excerpt
     assert "Cataract waiting period" in excerpt
+
+
+def test_gemma4_is_default_and_full_policy_summary_covers_every_page(monkeypatch):
+    import json
+    import re
+    from backend import gemma_client
+
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
+    monkeypatch.delenv("GEMMA_MODEL", raising=False)
+    assert gemma_client._cloud_model_name() == "gemma-4-26b-a4b-it"
+
+    class FakeModels:
+        calls = 0
+
+        def generate_content(self, **kwargs):
+            self.calls += 1
+            pages_in_prompt = [int(value) for value in re.findall(r"\[PDF page (\d+)\]", kwargs["contents"])]
+            first = pages_in_prompt[0]
+            return SimpleNamespace(text=json.dumps({
+                "insurer": None,
+                "policy_name": {"fact": f"Plan on page {first}", "pages": [first]},
+                "policy_type": None,
+                "policy_period": None,
+                "sum_insured": None,
+                "insured_members": [],
+                "benefits": [{"fact": f"Benefit from page {first}", "pages": [first]}],
+                "sub_limits": [],
+                "waiting_periods": [],
+                "exclusions": [],
+                "claim_requirements": [],
+                "network_terms": [],
+                "uncertainties": [],
+            }))
+
+    models = FakeModels()
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            self.models = models
+
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setenv("USE_LOCAL_LLM", "0")
+    monkeypatch.setattr(gemma_client, "HAS_GENAI", True)
+    monkeypatch.setattr(gemma_client, "genai", SimpleNamespace(Client=FakeClient))
+    pages = [{"page": page, "text": f"Policy clause page {page}"} for page in range(1, 22)]
+    result = gemma_client.summarize_policy_pages(pages, allow_cloud_processing=True)
+
+    assert models.calls == 3
+    assert result["pages_processed"] == 21
+    assert result["model_used"] == "cloud_gemma (gemma-4-26b-a4b-it)"
+    assert [fact["pages"][0] for fact in result["summary"]["benefits"]] == [1, 11, 21]

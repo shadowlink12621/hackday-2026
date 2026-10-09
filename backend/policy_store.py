@@ -126,7 +126,7 @@ def ingest_policy_pdf(pdf_bytes: bytes, filename: str) -> dict[str, Any]:
             policy_id = int(cursor.lastrowid)
             conn.executemany(
                 "INSERT INTO policy_pages (policy_id, page_number, page_text) VALUES (?, ?, ?)",
-                [(policy_id, number, text) for number, text in nonempty],
+                [(policy_id, number, text) for number, text in pages],
             )
         row = conn.execute(
             "SELECT id, filename, page_count, insurer, imported_at FROM policies WHERE id = ?",
@@ -140,6 +140,7 @@ def ingest_policy_pdf(pdf_bytes: bytes, filename: str) -> dict[str, Any]:
         "imported_at": row[4],
         "duplicate_upload": bool(existing),
         "indexed_pages": len(nonempty),
+        "unreadable_pages": [number for number, text in pages if not text],
     }
 
 
@@ -160,6 +161,13 @@ def get_policy(policy_id: int) -> dict[str, Any] | None:
         "insurer": row[3],
         "imported_at": row[4],
     }
+    with get_db_connection() as conn:
+        policy["unreadable_pages"] = [
+            page[0] for page in conn.execute(
+                "SELECT page_number FROM policy_pages WHERE policy_id = ? AND trim(page_text) = '' ORDER BY page_number",
+                (policy_id,),
+            ).fetchall()
+        ]
     # Build this profile from the uploaded policy, not a particular insurer's demo fixture.
     profile_queries = (
         ("insurer product plan policy wording schedule version", "Policy identity and plan"),
@@ -194,7 +202,9 @@ def get_policy(policy_id: int) -> dict[str, Any] | None:
                 "status": "conflict_review" if conflicting_room_text else "source_found",
             })
     policy["profile"] = profile
+    policy["facts"] = profile
     return policy
+
 
 
 @with_db_retry

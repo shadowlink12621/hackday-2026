@@ -14,6 +14,13 @@ import {
   uploadCaseDocument,
 } from '../api';
 
+const SUGGESTED_QUESTIONS = [
+  'What is the cataract waiting period?',
+  'What does the policy say about room rent?',
+  'Are refractive error treatments excluded?',
+  'What are the pre-existing disease terms?',
+];
+
 const EMPTY_PATIENT = {
   patient_name: '',
   age: '',
@@ -380,8 +387,20 @@ export default function PolicyNavigator() {
       {step === 'review' && policyData && policyDocument && (
         <div className="review-grid">
           <div className="review-column">
+            {policyData.unreadable_pages?.length > 0 && (
+              <div className="notice notice-error" role="alert">
+                PDF pages {policyData.unreadable_pages.join(', ')} have no selectable text. Gemma 4 will not claim a complete policy review until those pages are OCR-processed.
+              </div>
+            )}
+            {policyData.warnings?.length > 0 && (
+              <div className="notice notice-error" style={{ marginBottom: '16px' }}>
+                <strong>Policy Notice:</strong>
+                {policyData.warnings.map((w, i) => <div key={i}>{w}</div>)}
+              </div>
+            )}
+
             <section className="card workflow-panel">
-              <div className="eyebrow">POLICY SUMMARY · SOURCE-DERIVED</div>
+              <div className="eyebrow">POLICY SOURCE &amp; OUTLINE</div>
               <h2>{policyData.insurer || 'Insurer not identified'}</h2>
               <dl className="policy-meta">
                 <div><dt>Document</dt><dd>{policyData.filename}</dd></div>
@@ -389,16 +408,13 @@ export default function PolicyNavigator() {
                 <div><dt>Imported</dt><dd>{new Date(policyData.imported_at).toLocaleString()}</dd></div>
                 <div><dt>Profile facts found</dt><dd>{policyData.profile?.length || 0}</dd></div>
               </dl>
-              {modelStatus?.active_backend === 'cloud_gemma' && (
-                <label className="consent-line"><input type="checkbox" checked={cloudConsent} onChange={(event) => setCloudConsent(event.target.checked)} />
-                  I consent to cloud processing when I request a generated answer or outline. Questions send relevant redacted passages; a full outline sends the redacted text of the entire policy, which may still contain sensitive details.
-                </label>
-              )}
-              {modelStatus?.active_backend === 'cloud_gemma' && (
-                <button type="button" className="primary-button" onClick={handleSummary} disabled={!cloudConsent || busy}>
-                  Generate cited policy outline
-                </button>
-              )}
+              <label className="consent-line"><input type="checkbox" checked={cloudConsent} onChange={(event) => setCloudConsent(event.target.checked)} />
+                I consent to send the redacted policy text to Gemma 4 for cited answers and a full policy outline. Redaction may miss sensitive details.
+              </label>
+              <button type="button" className="primary-button" onClick={handleSummary} disabled={!cloudConsent || !modelStatus?.cloud_gemma_configured || busy}>
+                Generate cited policy outline
+              </button>
+              {!modelStatus?.cloud_gemma_configured && <p className="runtime-note">Gemma 4 is not configured on the backend. Set GEMINI_API_KEY there, restart it, and test the connection.</p>}
               <div className="model-connection-check">
                 <button type="button" className="secondary-button" onClick={handleModelCheck} disabled={modelCheck?.loading}>
                   {modelCheck?.loading ? 'Checking…' : 'Test AI connection'}
@@ -434,11 +450,47 @@ export default function PolicyNavigator() {
           </div>
 
           <section className="card policy-chat">
-            <div className="eyebrow">POLICY Q&A</div>
+            <div className="eyebrow">POLICY Q&amp;A</div>
             <h2>Ask about this document</h2>
             <p className="muted-copy">Answers use retrieved clauses and show their PDF pages. They are not a coverage decision.</p>
-            {modelStatus?.active_backend === 'cloud_gemma' && <p className="runtime-note">Cloud processing runs only while consent is enabled above.</p>}
-            {modelStatus?.active_backend !== 'cloud_gemma' && <p className="runtime-note">No cloud model is active. This workspace will return relevant source text without generated answers unless a local model is selected.</p>}
+            <p className="runtime-note">With consent and a working backend key, Gemma 4 answers from retrieved policy pages. Otherwise, answers show source passages only.</p>
+
+            {messages.length === 0 && (
+              <div style={{ margin: '14px 0' }}>
+                <span style={{ fontSize: '12px', color: '#8d9ba8', fontWeight: 600 }}>Suggested Questions:</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
+                  {SUGGESTED_QUESTIONS.map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      type="button"
+                      style={{
+                        fontSize: '11px',
+                        padding: '5px 10px',
+                        borderRadius: '12px',
+                        border: '1px solid rgba(56, 189, 248, 0.4)',
+                        background: 'rgba(56, 189, 248, 0.08)',
+                        color: '#38bdf8',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                      }}
+                      onClick={() => {
+                        const prompt = suggestion;
+                        setMessages((previous) => [...previous, { role: 'user', text: prompt }]);
+                        setBusy(true);
+                        askPolicy(policyDocument.policy_id, prompt, cloudConsent)
+                          .then((res) => setMessages((previous) => [...previous, { role: 'assistant', ...res }]))
+                          .catch((err) => setError(err.message))
+                          .finally(() => setBusy(false));
+                      }}
+                      disabled={busy}
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="chat-log" aria-live="polite">
               {messages.map((message, index) => (
                 <article className={`chat-message ${message.role}`} key={`${message.role}-${index}`}>
