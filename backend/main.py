@@ -68,7 +68,7 @@ async def process_request(
     return {
         "claim_id": claim_id,
         "metadata": {
-            "model_used": os.environ.get("GEMMA_MODEL", "gemini-2.5-flash"),
+            "model_used": os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it"),
             "is_fallback_mock": is_mock,
             "latency_ms": latency_ms,
             "timestamp": datetime.now(timezone.utc).isoformat(),

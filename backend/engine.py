@@ -86,9 +86,12 @@ class ValidationResult(BaseModel):
     results: List[RuleResult]
 
 
-def get_exchange_rate(currency: str) -> float:
-    rates = {"USD": 83.5, "EUR": 90.0, "INR": 1.0}
+def get_exchange_rate(currency: str, custom_rates: dict[str, float] | None = None) -> float:
+    rates = {"USD": 83.5, "EUR": 90.0, "INR": 1.0, "GBP": 105.0}
+    if custom_rates and isinstance(custom_rates, dict):
+        rates.update({k.upper(): float(v) for k, v in custom_rates.items()})
     return rates.get(currency.upper(), 1.0)
+
 
 
 @with_db_retry
@@ -175,26 +178,27 @@ def run_deterministic_checks(
     except Exception:
         settings = {}
 
-    policy_limit_inr = settings.get("policy_limit_inr", 4000.0)
+    policy_limit_inr = float(settings.get("policy_limit_inr", 4000.0))
+    custom_exchange_rates = settings.get("exchange_rates", {})
 
-    # 1. Fraud / Duplicate Check
+    # 1. Exact Duplicate Submission Check (SHA-256)
     image_hash = hashlib.sha256(image_bytes).hexdigest() if image_bytes else "no-image-hash"
     is_duplicate = check_and_record_receipt_hash(image_hash, bool(image_bytes))
 
     if is_duplicate:
         results.append(
             RuleResult(
-                rule_name="Fraud Detection",
+                rule_name="Exact Duplicate Submission (SHA-256)",
                 passed=False,
-                message="🚨 DUPLICATE DETECTED! This document has already been processed.",
+                message="🚨 DUPLICATE DETECTED! Exact document image hash already recorded in ledger.",
             )
         )
     else:
         results.append(
             RuleResult(
-                rule_name="Fraud Detection",
+                rule_name="Exact Duplicate Submission (SHA-256)",
                 passed=True,
-                message="Document hash is unique.",
+                message="Document hash is unique in ledger.",
             )
         )
 
@@ -221,45 +225,48 @@ def run_deterministic_checks(
         )
 
     # 3. Domain Specific Logic
-    exchange_rate = get_exchange_rate(extracted_data.currency)
+    exchange_rate = get_exchange_rate(extracted_data.currency, custom_exchange_rates)
     final_amount_inr = calculated_total * exchange_rate
 
     if domain_mode == "health_insurance":
+        room_rent_cap_inr = float(settings.get("room_rent_cap_inr", 10000.0))
+        disallow_consumables = not bool(settings.get("allow_consumables", False))
+
         room_rent_items = [item for item in extracted_data.items if item.category == "room_rent"]
         if room_rent_items:
             room_total = sum(i.amount for i in room_rent_items) * exchange_rate
-            if room_total > 10000:
+            if room_total > room_rent_cap_inr:
                 results.append(
                     RuleResult(
-                        rule_name="Room Rent Cap",
+                        rule_name="Room Rent Policy Cap",
                         passed=False,
-                        message=f"Room rent {room_total} INR exceeds standard cap. Requires manual review.",
+                        message=f"Room rent ₹{room_total:.2f} exceeds policy cap of ₹{room_rent_cap_inr:.2f}. Requires manual approval.",
                     )
                 )
             else:
                 results.append(
                     RuleResult(
-                        rule_name="Room Rent Cap",
+                        rule_name="Room Rent Policy Cap",
                         passed=True,
-                        message=f"Room rent {room_total} INR within limits.",
+                        message=f"Room rent ₹{room_total:.2f} within policy cap of ₹{room_rent_cap_inr:.2f}.",
                     )
                 )
 
         consumables = [item for item in extracted_data.items if item.category == "consumables"]
-        if consumables:
+        if consumables and disallow_consumables:
             results.append(
                 RuleResult(
-                    rule_name="Consumables Excluded",
+                    rule_name="Non-Medical Consumables Exclusion",
                     passed=False,
-                    message="Non-medical consumables are not covered by standard policy.",
+                    message="Standard policy excludes non-medical consumables (gloves, syringes, sanitizers).",
                 )
             )
         else:
             results.append(
                 RuleResult(
-                    rule_name="Consumables Check",
+                    rule_name="Consumables Compliance",
                     passed=True,
-                    message="No non-medical consumables found.",
+                    message="No excluded non-medical consumables found.",
                 )
             )
 
@@ -283,6 +290,7 @@ def run_deterministic_checks(
             )
 
     is_valid = all(r.passed for r in results)
+
 
     return ValidationResult(
         is_valid=is_valid,

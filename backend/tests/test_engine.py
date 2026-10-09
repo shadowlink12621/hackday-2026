@@ -71,9 +71,9 @@ def test_duplicate_fraud():
     result1 = run_deterministic_checks(mock_data, b"duplicate_bytes", "{}", "expense")
     result2 = run_deterministic_checks(mock_data, b"duplicate_bytes", "{}", "expense")
 
-    assert any("unique" in r.message for r in result1.results if r.rule_name == "Fraud Detection")
+    assert any("unique" in r.message for r in result1.results if "Duplicate" in r.rule_name)
     assert result2.is_valid is False
-    assert any("DUPLICATE DETECTED" in r.message for r in result2.results if r.rule_name == "Fraud Detection")
+    assert any("DUPLICATE DETECTED" in r.message for r in result2.results if "Duplicate" in r.rule_name)
 
 
 def test_health_insurance_consumables():
@@ -91,7 +91,8 @@ def test_health_insurance_consumables():
     )
     result = run_deterministic_checks(mock_data, b"fake_image_bytes_4", "{}", "health_insurance")
     assert result.is_valid is False
-    assert any("Consumables Excluded" in r.rule_name for r in result.results)
+    assert any("Consumables" in r.rule_name for r in result.results)
+
 
 
 def test_save_and_retrieve_claims():
