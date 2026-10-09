@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { processDocument, getClaims, saveDecision, getAuditCsv } from './api';
+import { validateDocument, fetchClaims, recordClaimDecision, getAuditCsv, fetchModelStatus } from './api';
 import './index.css';
 
 import Header from './components/Header';
@@ -8,6 +8,16 @@ import ResultsDashboard from './components/ResultsDashboard';
 import HistoryTable from './components/HistoryTable';
 import ErrorBoundary from './components/ErrorBoundary';
 import FeatureShaderCards from './components/ui/feature-shader-cards';
+import BenefitCalendar from './components/BenefitCalendar';
+import ScamCheck from './components/ScamCheck';
+import InsurerKnowledge from './components/InsurerKnowledge';
+
+const appTabs = [
+  { id: 'claims', label: 'Claims Workspace' },
+  { id: 'calendar', label: 'Benefit Calendar' },
+  { id: 'scamcheck', label: 'ScamCheck' },
+  { id: 'insurers', label: 'Insurer Knowledge' },
+];
 
 function App() {
   const [file, setFile] = useState(null);
@@ -17,10 +27,13 @@ function App() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [claimsHistory, setClaimsHistory] = useState([]);
+  const [activeTab, setActiveTab] = useState('claims');
+  const [modelStatus, setModelStatus] = useState(null);
+  const [actionLoadingId, setActionLoadingId] = useState(null);
 
   const loadHistory = async () => {
     try {
-      const history = await getClaims();
+      const history = await fetchClaims();
       setClaimsHistory(history);
     } catch (err) {
       console.error(err);
@@ -29,6 +42,16 @@ function App() {
 
   useEffect(() => {
     loadHistory();
+    let active = true;
+    const refreshModelStatus = () => fetchModelStatus()
+      .then((status) => active && setModelStatus(status))
+      .catch(() => active && setModelStatus(null));
+    refreshModelStatus();
+    const intervalId = window.setInterval(refreshModelStatus, 30000);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   const handleFileChange = (e) => {
@@ -48,7 +71,7 @@ function App() {
     setError(null);
     
     try {
-      const data = await processDocument(file, domainMode);
+      const data = await validateDocument(file, domainMode);
       setResult(data);
       await loadHistory();
     } catch (err) {
@@ -59,8 +82,9 @@ function App() {
   };
 
   const handleDecision = async (claimId, decision) => {
+    setActionLoadingId(claimId);
     try {
-      await saveDecision(claimId, decision);
+      await recordClaimDecision(claimId, decision);
       await loadHistory();
       if (result && result.claim_id === claimId) {
         setResult(null);
@@ -68,7 +92,9 @@ function App() {
         setPreviewUrl(null);
       }
     } catch (err) {
-      alert("Failed to submit decision");
+      setError(err.message || 'Failed to submit decision.');
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
@@ -91,7 +117,7 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <Header />
+      <Header modelStatus={modelStatus} />
       
       <main className="page">
         <div className="hero">
@@ -102,8 +128,8 @@ function App() {
           </div>
           <div className="hero-stat">
             <span>MODEL</span>
-            <strong>Gemma 2.5 Flash</strong>
-            <small>Multimodal Extraction</small>
+            <strong>{modelStatus?.active_backend === 'cloud_gemma' ? 'Cloud Gemma 4' : modelStatus?.active_backend === 'local_ollama' ? 'Local Ollama Gemma' : modelStatus?.active_backend === 'offline_mock' ? 'Offline fallback' : 'Checking model…'}</strong>
+            <small>{modelStatus?.active_backend === 'offline_mock' ? 'Offline mode ready' : modelStatus ? 'Runtime model status' : 'Waiting for backend'}</small>
           </div>
         </div>
 
@@ -125,6 +151,26 @@ function App() {
           </div>
         </div>
       )}
+
+        <nav className="app-tabs" role="tablist" aria-label="ClaimGuard workspaces">
+          {appTabs.map((tab) => (
+            <button
+              type="button"
+              role="tab"
+              id={`tab-${tab.id}`}
+              aria-selected={activeTab === tab.id}
+              aria-controls={`panel-${tab.id}`}
+              className={activeTab === tab.id ? 'app-tab active' : 'app-tab'}
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+
+        {activeTab === 'claims' && (
+          <div id="panel-claims" className="app-tab-panel" role="tabpanel" aria-labelledby="tab-claims" tabIndex={0}>
         
         <div className="work-grid">
           <div>
@@ -141,6 +187,7 @@ function App() {
               claimsHistory={claimsHistory}
               handleDecision={handleDecision}
               handleExportCsv={handleExportCsv}
+              actionLoadingId={actionLoadingId}
             />
           </div>
           
@@ -150,6 +197,23 @@ function App() {
           />
         </div>
         <FeatureShaderCards />
+          </div>
+        )}
+        {activeTab === 'calendar' && (
+          <div id="panel-calendar" className="app-tab-panel" role="tabpanel" aria-labelledby="tab-calendar" tabIndex={0}>
+            <BenefitCalendar claims={claimsHistory} />
+          </div>
+        )}
+        {activeTab === 'scamcheck' && (
+          <div id="panel-scamcheck" className="app-tab-panel" role="tabpanel" aria-labelledby="tab-scamcheck" tabIndex={0}>
+            <ScamCheck />
+          </div>
+        )}
+        {activeTab === 'insurers' && (
+          <div id="panel-insurers" className="app-tab-panel" role="tabpanel" aria-labelledby="tab-insurers" tabIndex={0}>
+            <InsurerKnowledge />
+          </div>
+        )}
       </main>
     </ErrorBoundary>
   );

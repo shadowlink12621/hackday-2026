@@ -145,6 +145,17 @@ button, select {
   animation: pulseGlow 2s infinite;
 }
 
+.model-status { display: flex; align-items: center; gap: 9px; max-width: 300px; }
+.model-status > i { width: 9px; height: 9px; flex: none; border-radius: 50%; }
+.model-status strong { display: block; font: 600 10px 'DM Mono', monospace; letter-spacing: .8px; }
+.model-status small { display: block; max-width: 230px; overflow: hidden; margin-top: 3px; color: #91a5a8; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.model-status-gemma > i, .model-status-local > i { background: #00e676; box-shadow: 0 0 10px rgba(0, 230, 118, .5); }
+.model-status-gemma strong, .model-status-local strong { color: #76efad; }
+.model-status-offline > i { background: #4ea8ff; box-shadow: 0 0 10px rgba(78, 168, 255, .45); }
+.model-status-offline strong { color: #77bdff; }
+.model-status-unavailable > i { background: #819294; }
+.model-status-unavailable strong { color: #b1bdbe; }
+
 .page {
   max-width: 1280px;
   margin: auto;
@@ -823,6 +834,72 @@ tbody tr:hover td { background: rgba(255, 255, 255, 0.02); }
   background: var(--red);
   color: #fff;
 }
+.action-buttons button:disabled { opacity: .55; cursor: wait; }
+
+.app-tabs { display: flex; gap: 8px; margin: 34px 0 22px; overflow-x: auto; border-bottom: 1px solid var(--line); scrollbar-width: thin; }
+.app-tab { flex: none; padding: 12px 16px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #91a5a8; font-size: 13px; font-weight: 600; cursor: pointer; transition: color .2s, border-color .2s, background .2s; }
+.app-tab:hover { color: #fff; background: rgba(255, 255, 255, .025); }
+.app-tab.active { border-bottom-color: var(--teal); color: var(--teal); }
+.app-tab:focus-visible, .insurer-choice:focus-visible, .calendar-download:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.app-tab-panel { min-height: 280px; }
+.companion-card { min-height: 400px; padding: 30px; }
+.companion-card > h2 { margin: 8px 0; color: #fff; font: 700 25px Manrope, sans-serif; }
+.companion-intro { max-width: 780px; margin: 8px 0 24px; color: #a8b8ba; font-size: 14px; line-height: 1.65; }
+.companion-count { flex: none; padding: 6px 10px; border: 1px solid rgba(0, 255, 179, .2); border-radius: 999px; color: var(--teal); font: 600 10px 'DM Mono', monospace; letter-spacing: .4px; }
+.companion-footnote { margin: 18px 0 0; color: #819294; font-size: 11px; line-height: 1.55; }
+.calendar-claim-list { display: grid; gap: 12px; }
+.calendar-claim { display: flex; align-items: center; gap: 18px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: rgba(0, 0, 0, .18); }
+.calendar-date-mark { display: grid; width: 60px; height: 58px; flex: none; place-content: center; border: 1px solid rgba(0, 255, 179, .22); border-radius: 12px; background: rgba(0, 255, 179, .06); text-align: center; }
+.calendar-date-mark span { color: #93aaa6; font: 500 8px 'DM Mono', monospace; }
+.calendar-date-mark strong { color: var(--teal); font: 700 16px Manrope, sans-serif; }
+.calendar-claim-details { display: grid; min-width: 0; flex: 1; gap: 4px; }
+.calendar-claim-details strong { overflow: hidden; color: #fff; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.calendar-claim-details span { color: #aab9ba; font-size: 12px; }
+.calendar-claim-details small { color: #819294; font-size: 11px; }
+.calendar-download { flex: none; text-decoration: none; text-align: center; }
+.scam-card { max-width: 900px; margin: 0 auto; }
+.scam-form textarea { width: 100%; resize: vertical; border: 1px solid rgba(255,255,255,.12); border-radius: 10px; padding: 14px; background: rgba(0,0,0,.25); color: #eef6f3; font: inherit; font-size: 13px; line-height: 1.6; }
+.scam-form textarea:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-dim); }
+.scam-form textarea::placeholder { color: #718486; }
+.scam-form-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
+.scam-form-footer small { color: #819294; font-size: 11px; }
+.scam-form-footer .primary-button { width: auto; min-width: 160px; margin: 0; }
+.scam-result { margin-top: 24px; padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: rgba(0,0,0,.2); }
+.scam-score-row { display: flex; justify-content: space-between; gap: 18px; }
+.scam-score-row h3 { margin: 5px 0 0; color: #fff; font: 700 18px Manrope, sans-serif; }
+.scam-score { color: #d9e5e2; }
+.scam-score strong { color: inherit; font: 700 28px Manrope, sans-serif; }
+.scam-score span { margin-left: 4px; color: #819294; font-size: 12px; }
+.risk-high_risk { border-color: rgba(255,77,77,.38); }
+.risk-high_risk .scam-score strong { color: var(--red); }
+.risk-medium_risk { border-color: rgba(255,209,102,.35); }
+.risk-medium_risk .scam-score strong { color: #ffd166; }
+.risk-safe .scam-score strong { color: var(--success); }
+.risk-meter { height: 7px; overflow: hidden; margin: 12px 0 20px; border-radius: 99px; background: rgba(255,255,255,.08); }
+.risk-meter span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #00e676, #ffd166 55%, #ff4d4d); transition: width .25s ease; }
+.scam-flags h4, .scam-guidance strong { margin: 0 0 8px; color: #f3faf7; font-size: 13px; }
+.scam-flags ul { display: grid; gap: 8px; padding-left: 20px; color: #d0dcda; font-size: 12px; line-height: 1.55; }
+.scam-guidance { margin-top: 16px; padding: 14px; border-left: 3px solid var(--teal); border-radius: 0 8px 8px 0; background: rgba(0,255,179,.055); }
+.scam-guidance p, .scam-no-flags { margin: 4px 0 0; color: #c1cfcd; font-size: 13px; line-height: 1.6; }
+.official-link { display: inline-flex; margin-top: 14px; color: var(--teal); font-size: 12px; font-weight: 700; text-decoration: none; }
+.official-link:hover { text-decoration: underline; }
+.scam-error, .companion-error { margin-top: 16px; }
+.insurer-layout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 20px; }
+.insurer-picker { display: grid; align-content: start; gap: 7px; }
+.insurer-choice { padding: 11px 12px; border: 1px solid var(--line); border-radius: 9px; background: rgba(0,0,0,.16); color: #b4c3c4; text-align: left; text-transform: capitalize; cursor: pointer; }
+.insurer-choice:hover { border-color: rgba(0,255,179,.3); color: #fff; }
+.insurer-choice.selected { border-color: rgba(0,255,179,.4); background: rgba(0,255,179,.08); color: var(--teal); }
+.insurer-detail { min-width: 0; padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: rgba(0,0,0,.14); }
+.insurer-detail-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.insurer-detail-heading h3 { margin: 5px 0 18px; color: #fff; font: 700 19px Manrope, sans-serif; }
+.insurer-traps { display: grid; gap: 10px; }
+.insurer-trap { display: flex; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 9px; background: rgba(0,0,0,.18); }
+.insurer-trap > span { color: var(--teal); font: 600 10px 'DM Mono', monospace; }
+.insurer-trap p { margin: 0; color: #c4d0ce; font-size: 12px; line-height: 1.6; }
+.insurer-source { margin-top: 18px; color: #a9b7b7; font-size: 12px; }
+.insurer-source summary { cursor: pointer; }
+.insurer-source pre { max-height: 400px; overflow: auto; margin-top: 10px; padding: 12px; border-radius: 8px; background: rgba(0,0,0,.2); color: #a9b7b7; font: 11px/1.6 'DM Mono', monospace; white-space: pre-wrap; }
+.inline-loading { color: #a7b8b8; font-size: 13px; }
 
 .history-empty {
   border: 2px dashed var(--line);
@@ -958,6 +1035,8 @@ tbody tr:hover td { background: rgba(255, 255, 255, 0.02); }
   .dropzone { min-height: 180px; }
   .results-card { min-height: 400px; }
   .shader-features-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .insurer-layout { grid-template-columns: 1fr; }
+  .insurer-picker { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (max-width: 600px) {
@@ -974,4 +1053,10 @@ tbody tr:hover td { background: rgba(255, 255, 255, 0.02); }
   .shader-features { margin-top: 48px; }
   .shader-features-grid { grid-template-columns: 1fr; gap: 14px; }
   .shader-feature-card, .shader-feature-content { min-height: 250px; }
+  .companion-card { padding: 20px; }
+  .calendar-claim { align-items: flex-start; flex-wrap: wrap; }
+  .calendar-download { width: 100%; }
+  .insurer-picker { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .model-status small { display: none; }
+  .topbar-right { gap: 0; }
 }
