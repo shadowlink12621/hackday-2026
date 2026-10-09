@@ -8,6 +8,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [domainMode, setDomainMode] = useState('expense');
   const fileInputRef = useRef(null);
 
   const handleFileChange = (e) => {
@@ -49,7 +50,7 @@ function App() {
     setError(null);
     
     try {
-      const data = await validateDocument(file);
+      const data = await validateDocument(file, domainMode);
       setResult(data);
     } catch (err) {
       setError(err.message || 'Failed to connect to the validation engine.');
@@ -61,14 +62,25 @@ function App() {
   return (
     <>
       <header>
-        <h1>DocuGuard</h1>
-        <p>Gemma 4 Multimodal Document Validator & Agent Skill</p>
+        <h1>ClaimGuard</h1>
+        <p>AI assisted claim review with deterministic policy checks</p>
       </header>
       
       <main className="container">
         {/* Left Panel: Input */}
         <section className="panel">
           <h2>Input Document</h2>
+
+          <label className="domain-label" htmlFor="domain-mode">Claim type</label>
+          <select
+            id="domain-mode"
+            className="domain-select"
+            value={domainMode}
+            onChange={(e) => setDomainMode(e.target.value)}
+          >
+            <option value="expense">Corporate Expense</option>
+            <option value="health_insurance">Health Insurance</option>
+          </select>
           
           <div 
             className="upload-area"
@@ -81,7 +93,7 @@ function App() {
               type="file" 
               ref={fileInputRef} 
               onChange={handleFileChange} 
-              accept="image/*,application/pdf"
+              accept="image/jpeg,image/png"
             />
             
             {previewUrl ? (
@@ -131,16 +143,16 @@ function App() {
                   <h3>🧠 Gemma 4 Perception (JSON Schema)</h3>
                   <div className="data-row">
                     <span className="data-label">Document Type</span>
-                    <span className="data-value">{result.perception.document_type}</span>
+                    <span className="data-value">{domainMode === 'health_insurance' ? 'Health insurance bill' : 'Expense receipt'}</span>
                   </div>
                   <div className="data-row">
                     <span className="data-label">Date Extracted</span>
-                    <span className="data-value">{result.perception.date_extracted || 'None'}</span>
+                    <span className="data-value">{result.perception.structured_data.date_extracted || 'None'}</span>
                   </div>
                   <div className="data-row">
                     <span className="data-label">Confidence</span>
-                    <span className="data-value" style={{color: result.perception.confidence_score >= 0.7 ? 'var(--success)' : 'var(--error)'}}>
-                      {(result.perception.confidence_score * 100).toFixed(0)}%
+                    <span className="data-value" style={{color: result.perception.confidence >= 0.7 ? 'var(--success)' : 'var(--error)'}}>
+                      {(result.perception.confidence * 100).toFixed(0)}%
                     </span>
                   </div>
                 </div>

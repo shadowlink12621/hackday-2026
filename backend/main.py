@@ -11,6 +11,9 @@ from datetime import datetime, timezone
 from typing import Optional
 import os
 
+MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png"}
+
 app = FastAPI(title="ClaimGuard Enterprise API")
 
 app.add_middleware(
@@ -36,6 +39,12 @@ async def process_request(
     
     contents = await file.read() if file else b""
     mime_type = file.content_type if file else "text/plain"
+
+    if file:
+        if mime_type not in ALLOWED_IMAGE_TYPES:
+            raise HTTPException(status_code=400, detail="Only JPEG and PNG images are supported.")
+        if len(contents) > MAX_FILE_SIZE_BYTES:
+            raise HTTPException(status_code=400, detail="File size must be 5 MB or less.")
     
     extracted_data, is_mock = extract_form_data(contents, mime_type, prompt, domain_mode)
     validation_result = run_deterministic_checks(extracted_data, contents, rule_settings, domain_mode)

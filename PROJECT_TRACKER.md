@@ -21,8 +21,8 @@ This document serves as the single source of truth for tracking progress across 
 - [x] Implement `GET /api/export.csv` (Download audit report).
 - [x] Standardize API endpoints (e.g. `/api/validate`) and JSON payload names (`validation`) across backend and `CONTRACTS.md`.
 
-### Stage 3: Hardening & Edge Cases ⏳ (CODEX - UP NEXT)
-- [ ] Add strict file-size validation (reject files > 5MB) and MIME-type checks (`.jpg`, `.png` only) to the FastAPI endpoints.
+### Stage 3: Hardening & Edge Cases ⏳
+- [x] Add strict file-size validation (reject files > 5MB) and MIME-type checks (`.jpg`, `.png` only) to the FastAPI validation endpoint.
 - [ ] Add exception handling for `sqlite3.OperationalError` (database is locked).
 - [ ] Expand `backend/tests/test_engine.py` to test the new `/api/claims` and `/api/export.csv` endpoints.
 - [ ] Final code cleanup and PEP8 formatting.
@@ -32,11 +32,11 @@ This document serves as the single source of truth for tracking progress across 
 ## 👨‍💻 PERSON B (Frontend & Deployment)
 **Owner:** Teammate / Codex
 
-### Stage 1: Scaffold & Mock UI ⏳ (CODEX - IN PROGRESS)
+### Stage 1: Scaffold & API-connected UI ⏳
 - [x] Initialize React/Vite in `frontend/`.
-- [ ] Build drag-and-drop file upload zone with Domain Selector (Expense vs Health).
-- [ ] Build API Client (`api.js`) to send `file`, `domain_mode`, and `prompt` to `/api/validate`.
-- [ ] Build Results Dashboard (Render Red/Green badges based on `response.validation.is_valid`).
+- [x] Build drag-and-drop file upload zone with Domain Selector (Expense vs Health).
+- [x] Build API Client (`api.js`) to send `file`, `domain_mode`, and `prompt` to `/api/validate`.
+- [x] Build Results Dashboard (Render Red/Green badges based on `response.validation.is_valid`).
 
 ### Stage 2: API Integration & Workflow
 - [ ] Connect dashboard to `GET /api/claims` to fetch history.
@@ -48,3 +48,10 @@ This document serves as the single source of truth for tracking progress across 
 - [ ] Deploy Vite as a Static Site.
 - [ ] Deploy FastAPI as a Python Web Service, linking `GEMINI_API_KEY`.
 - [ ] End-to-end live testing before 3:30 PM deadline.
+
+## Checkpoint Protocol
+
+- Person A records backend and contract changes here after each pushed checkpoint.
+- Person B records frontend, browser, and deployment changes here after each pushed checkpoint.
+- Before starting a new iteration, each person checks `git log origin/master`, `git status -sb`, and this tracker.
+- Shared contract changes require both people to review `AGENTS.md` and `CONTRACTS.md`.
