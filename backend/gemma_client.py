@@ -62,7 +62,7 @@ def get_model_status() -> dict:
 
     return {
         "cloud_gemma_available": bool(cloud_key and HAS_GENAI),
-        "cloud_model": os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it"),
+        "cloud_model": os.environ.get("GEMMA_MODEL", "gemini-2.5-flash"),
         "local_ollama_online": local_ollama_online,
         "local_ollama_host": ollama_host,
         "local_models": local_models,
@@ -166,7 +166,7 @@ def extract_form_data(
     if not force_mock and HAS_GENAI and api_key and has_content and not use_local_llm:
         try:
             client = genai.Client(api_key=api_key)
-            model_name = os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it")
+            model_name = os.environ.get("GEMMA_MODEL", "gemini-2.5-flash")
 
             prompt = f"""
             Domain Mode: {domain_mode} (e.g. 'expense' or 'health_insurance')
@@ -277,7 +277,7 @@ def chat_with_claim(claim_json: str, user_question: str) -> str:
     if HAS_GENAI and api_key:
         try:
             client = genai.Client(api_key=api_key)
-            model = os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it")
+            model = os.environ.get("GEMMA_MODEL", "gemini-2.5-flash")
             prompt = f"You are a helpful assistant analyzing a claim.\n\nCLAIM DATA:\n{claim_json}\n\nUSER QUESTION:\n{user_question}"
             response = client.models.generate_content(
                 model=model,
@@ -320,7 +320,7 @@ USER QUESTION:
     if HAS_GENAI and api_key and not os.environ.get("USE_LOCAL_LLM"):
         try:
             client = genai.Client(api_key=api_key)
-            model = os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it")
+            model = os.environ.get("GEMMA_MODEL", "gemini-2.5-flash")
             response = client.models.generate_content(
                 model=model,
                 contents=prompt,

@@ -22,7 +22,7 @@ def generate_json(prompt: str, schema_cls: Type[BaseModel], images=None) -> tupl
     if tier == "cloud_gemma":
         try:
             client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-            model_name = os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it")
+            model_name = os.environ.get("GEMMA_MODEL", "gemini-2.5-flash")
             response = client.models.generate_content(
                 model=model_name,
                 contents=prompt,
