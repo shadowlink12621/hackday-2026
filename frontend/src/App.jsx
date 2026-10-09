@@ -1,42 +1,40 @@
-import { useState, useRef } from 'react';
-import { validateDocument } from './api';
+import { useState, useEffect } from 'react';
+import { processDocument, getClaims, saveDecision, getAuditCsv } from './api';
 import './index.css';
+
+import Header from './components/Header';
+import UploadZone from './components/UploadZone';
+import ResultsDashboard from './components/ResultsDashboard';
+import HistoryTable from './components/HistoryTable';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
   const [file, setFile] = useState(null);
+  const [domainMode, setDomainMode] = useState('expense');
   const [previewUrl, setPreviewUrl] = useState(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  const fileInputRef = useRef(null);
+  const [claimsHistory, setClaimsHistory] = useState([]);
+
+  const loadHistory = async () => {
+    try {
+      const history = await getClaims();
+      setClaimsHistory(history);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    loadHistory();
+  }, []);
 
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
     if (selected) {
       setFile(selected);
       setPreviewUrl(URL.createObjectURL(selected));
-      setResult(null);
-      setError(null);
-    }
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    e.currentTarget.classList.add('dragover');
-  };
-
-  const handleDragLeave = (e) => {
-    e.preventDefault();
-    e.currentTarget.classList.remove('dragover');
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.currentTarget.classList.remove('dragover');
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const dropped = e.dataTransfer.files[0];
-      setFile(dropped);
-      setPreviewUrl(URL.createObjectURL(dropped));
       setResult(null);
       setError(null);
     }
@@ -49,127 +47,100 @@ function App() {
     setError(null);
     
     try {
-      const data = await validateDocument(file);
+      const data = await processDocument(file, domainMode);
       setResult(data);
+      await loadHistory();
     } catch (err) {
-      setError(err.message || 'Failed to connect to the validation engine.');
+      setError(err.message || 'Failed to connect to the backend.');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleDecision = async (claimId, decision) => {
+    try {
+      await saveDecision(claimId, decision);
+      await loadHistory();
+      if (result && result.claim_id === claimId) {
+        setResult(null);
+        setFile(null);
+        setPreviewUrl(null);
+      }
+    } catch (err) {
+      alert("Failed to submit decision");
+    }
+  };
+
+  const handleExportCsv = async (e) => {
+    e.preventDefault();
+    try {
+      const blob = await getAuditCsv();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = 'audit_report.csv';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert("Failed to download CSV");
+    }
+  };
+
   return (
-    <>
-      <header>
-        <h1>DocuGuard</h1>
-        <p>Gemma 4 Multimodal Document Validator & Agent Skill</p>
-      </header>
+    <ErrorBoundary>
+      <Header />
       
-      <main className="container">
-        {/* Left Panel: Input */}
-        <section className="panel">
-          <h2>Input Document</h2>
-          
-          <div 
-            className="upload-area"
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleFileChange} 
-              accept="image/*,application/pdf"
-            />
-            
-            {previewUrl ? (
-              <img src={previewUrl} alt="Document Preview" className="preview-image" />
-            ) : (
-              <>
-                <div className="upload-icon">📄</div>
-                <p>Drag and drop a document here</p>
-                <p className="data-label" style={{marginTop: '0.5rem', fontSize: '0.8rem'}}>or click to browse</p>
-              </>
-            )}
+      <main className="page">
+        <div className="hero">
+          <div>
+            <div className="eyebrow">DOCUMENT PROCESSING ENGINE</div>
+            <h1>Automate Expense & Health Claims</h1>
+            <p className="subtitle">Upload a receipt or medical bill. Gemma 4 extracts the data, and our deterministic Python engine verifies fraud hashes and policy limits in real-time.</p>
           </div>
-          
-          <button 
-            className="btn" 
-            onClick={handleAnalyze} 
-            disabled={!file || loading}
-          >
-            {loading ? <span className="loader"></span> : 'Analyze Document'}
-          </button>
-          
-          {error && <div style={{color: 'var(--error)', marginTop: '1rem', textAlign: 'center'}}>{error}</div>}
-        </section>
+          <div className="hero-stat">
+            <span>MODEL</span>
+            <strong>Gemma 2.5 Flash</strong>
+            <small>Multimodal Extraction</small>
+          </div>
+        </div>
+
+        {error && (
+          <div className="notice notice-error">
+            <div>
+              <strong>Connection Error</strong>
+              <p style={{ margin: '4px 0 0' }}>{error}</p>
+            </div>
+            <button onClick={() => setError(null)}>×</button>
+          </div>
+        )}
         
-        {/* Right Panel: Output & Telemetry */}
-        <section className="panel">
-          <h2>Telemetry & Validation</h2>
-          
-          <div className="results">
-            {!result && !loading && (
-              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)'}}>
-                Upload a document to see Gemma 4 and deterministic engine results.
-              </div>
-            )}
-            
-            {loading && (
-              <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--accent)'}}>
-                <div className="loader" style={{width: '40px', height: '40px', borderWidth: '4px', marginBottom: '1rem'}}></div>
-                <p>Gemma 4 is processing the document...</p>
-              </div>
-            )}
+        <div className="work-grid">
+          <div>
+            <UploadZone 
+              domainMode={domainMode} setDomainMode={setDomainMode}
+              file={file} previewUrl={previewUrl} loading={loading}
+              handleFileChange={handleFileChange}
+              handleAnalyze={handleAnalyze}
+              setFile={setFile} setPreviewUrl={setPreviewUrl}
+              setResult={setResult} setError={setError}
+            />
 
-            {result && (
-              <>
-                {/* AI Perception (Gemma 4) */}
-                <div className="section-card">
-                  <h3>🧠 Gemma 4 Perception (JSON Schema)</h3>
-                  <div className="data-row">
-                    <span className="data-label">Document Type</span>
-                    <span className="data-value">{result.perception.document_type}</span>
-                  </div>
-                  <div className="data-row">
-                    <span className="data-label">Date Extracted</span>
-                    <span className="data-value">{result.perception.date_extracted || 'None'}</span>
-                  </div>
-                  <div className="data-row">
-                    <span className="data-label">Confidence</span>
-                    <span className="data-value" style={{color: result.perception.confidence_score >= 0.7 ? 'var(--success)' : 'var(--error)'}}>
-                      {(result.perception.confidence_score * 100).toFixed(0)}%
-                    </span>
-                  </div>
-                </div>
-
-                {/* Deterministic Verification (Code) */}
-                <div className="section-card" style={{flex: 1}}>
-                  <h3>⚙️ Deterministic Rule Verification</h3>
-                  <div style={{marginTop: '1rem'}}>
-                    {result.validation.results.map((rule, idx) => (
-                      <div key={idx} className={`rule-item ${rule.passed ? 'pass' : 'fail'}`}>
-                        <div className="rule-icon">{rule.passed ? '✅' : '❌'}</div>
-                        <div className="rule-content">
-                          <h4>{rule.rule_name}</h4>
-                          <p>{rule.message}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className={`status-badge ${result.validation.is_valid ? 'valid' : 'invalid'}`}>
-                  {result.validation.is_valid ? 'DOCUMENT ACCEPTED' : 'DOCUMENT REJECTED'}
-                </div>
-              </>
-            )}
+            <HistoryTable 
+              claimsHistory={claimsHistory}
+              handleDecision={handleDecision}
+              handleExportCsv={handleExportCsv}
+            />
           </div>
-        </section>
+          
+          <ResultsDashboard 
+            result={result} 
+            loading={loading} 
+          />
+        </div>
       </main>
-    </>
+    </ErrorBoundary>
   );
 }
 

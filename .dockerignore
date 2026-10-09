@@ -1,0 +1,13 @@
+.git
+.env
+.env.*
+hackday.env
+**/node_modules
+**/dist
+**/__pycache__
+**/*.py[cod]
+**/*.db
+**/.pytest_cache
+frontend/playwright-report
+frontend/test-results
+sample_docs
