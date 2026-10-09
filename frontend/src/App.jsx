@@ -31,6 +31,7 @@ function App() {
   const [error, setError] = useState(null);
   const [claimsHistory, setClaimsHistory] = useState([]);
   const [modelStatus, setModelStatus] = useState(null);
+  const [actionLoadingId, setActionLoadingId] = useState(null);
   const [authResolved, setAuthResolved] = useState(false);
   const [authRequired, setAuthRequired] = useState(false);
   const [authorized, setAuthorized] = useState(false);
@@ -136,6 +137,7 @@ function App() {
   };
 
   const handleDecision = async (claimId, decision) => {
+    setActionLoadingId(claimId);
     try {
       await saveDecision(claimId, decision);
       await loadHistory();

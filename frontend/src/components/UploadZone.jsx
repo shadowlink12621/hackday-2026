@@ -86,11 +86,6 @@ export default function UploadZone({
         I consent to send this document to Gemma for extraction. Leave unchecked for local/offline processing.
       </label>
 
-      <label className="consent-line upload-cloud-consent">
-        <input type="checkbox" checked={allowCloudProcessing} onChange={(event) => setAllowCloudProcessing(event.target.checked)} />
-        I consent to send this document to the configured cloud AI provider for extraction. Leave unchecked for local/offline processing.
-      </label>
-      
       <button 
         className="primary-button" 
         id="process-claim-btn"
