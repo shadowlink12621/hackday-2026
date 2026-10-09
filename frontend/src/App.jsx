@@ -7,8 +7,11 @@ import UploadZone from './components/UploadZone';
 import ResultsDashboard from './components/ResultsDashboard';
 import HistoryTable from './components/HistoryTable';
 import ErrorBoundary from './components/ErrorBoundary';
+import PolicyNavigator from './components/PolicyNavigator';
+import ScamCheckTab from './components/ScamCheckTab';
 
 function App() {
+  const [activeTab, setActiveTab] = useState('claims');
   const [file, setFile] = useState(null);
   const [domainMode, setDomainMode] = useState('expense');
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -42,10 +45,10 @@ function App() {
 
   const handleAnalyze = async () => {
     if (!file) return;
-    
+
     setLoading(true);
     setError(null);
-    
+
     try {
       const data = await processDocument(file, domainMode);
       setResult(data);
@@ -66,8 +69,8 @@ function App() {
         setFile(null);
         setPreviewUrl(null);
       }
-    } catch (err) {
-      alert("Failed to submit decision");
+    } catch {
+      alert('Failed to submit decision');
     }
   };
 
@@ -83,27 +86,78 @@ function App() {
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
-    } catch (err) {
-      alert("Failed to download CSV");
+    } catch {
+      alert('Failed to download CSV');
     }
   };
 
   return (
     <ErrorBoundary>
       <Header />
-      
+
       <main className="page">
         <div className="hero">
           <div>
-            <div className="eyebrow">DOCUMENT PROCESSING ENGINE</div>
-            <h1>Automate Expense & Health Claims</h1>
-            <p className="subtitle">Upload a receipt or medical bill. Gemma 4 extracts the data, and our deterministic Python engine verifies fraud hashes and policy limits in real-time.</p>
+            <div className="eyebrow">CLAIMGUARD · BENEFIT & READINESS COMPANION</div>
+            <h1>Insurance Claim Readiness & Benefit Navigator</h1>
+            <p className="subtitle">
+              Verify medical bills, index 60+ page policy wordings with citations, track 30-day statutory deadlines, and audit suspicious messages.
+            </p>
           </div>
           <div className="hero-stat">
             <span>MODEL</span>
-            <strong>Gemma 2.5 Flash</strong>
-            <small>Multimodal Extraction</small>
+            <strong>Gemma 4 Multimodal</strong>
+            <small>Local RAG + Citations</small>
           </div>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '12px' }}>
+          <button
+            onClick={() => setActiveTab('claims')}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '6px',
+              border: activeTab === 'claims' ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.1)',
+              background: activeTab === 'claims' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(255,255,255,0.03)',
+              color: activeTab === 'claims' ? '#38bdf8' : '#94a3b8',
+              fontWeight: 600,
+              fontSize: '13px',
+              cursor: 'pointer',
+            }}
+          >
+            📄 Expense & Bill Auditor
+          </button>
+          <button
+            onClick={() => setActiveTab('policy')}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '6px',
+              border: activeTab === 'policy' ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.1)',
+              background: activeTab === 'policy' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.03)',
+              color: activeTab === 'policy' ? '#10b981' : '#94a3b8',
+              fontWeight: 600,
+              fontSize: '13px',
+              cursor: 'pointer',
+            }}
+          >
+            🏥 Patient Case & 59-Page Policy RAG
+          </button>
+          <button
+            onClick={() => setActiveTab('scam')}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '6px',
+              border: activeTab === 'scam' ? '1px solid #ef4444' : '1px solid rgba(255,255,255,0.1)',
+              background: activeTab === 'scam' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(255,255,255,0.03)',
+              color: activeTab === 'scam' ? '#ef4444' : '#94a3b8',
+              fontWeight: 600,
+              fontSize: '13px',
+              cursor: 'pointer',
+            }}
+          >
+            🛡️ ScamCheck (IRDAI Bima Bharosa)
+          </button>
         </div>
 
         {error && (
@@ -115,30 +169,41 @@ function App() {
             <button onClick={() => setError(null)}>×</button>
           </div>
         )}
-        
-        <div className="work-grid">
-          <div>
-            <UploadZone 
-              domainMode={domainMode} setDomainMode={setDomainMode}
-              file={file} previewUrl={previewUrl} loading={loading}
-              handleFileChange={handleFileChange}
-              handleAnalyze={handleAnalyze}
-              setFile={setFile} setPreviewUrl={setPreviewUrl}
-              setResult={setResult} setError={setError}
-            />
 
-            <HistoryTable 
-              claimsHistory={claimsHistory}
-              handleDecision={handleDecision}
-              handleExportCsv={handleExportCsv}
-            />
+        {/* Tab 1: Claims & Expense Auditor */}
+        {activeTab === 'claims' && (
+          <div className="work-grid">
+            <div>
+              <UploadZone
+                domainMode={domainMode}
+                setDomainMode={setDomainMode}
+                file={file}
+                previewUrl={previewUrl}
+                loading={loading}
+                handleFileChange={handleFileChange}
+                handleAnalyze={handleAnalyze}
+                setFile={setFile}
+                setPreviewUrl={setPreviewUrl}
+                setResult={setResult}
+                setError={setError}
+              />
+
+              <HistoryTable
+                claimsHistory={claimsHistory}
+                handleDecision={handleDecision}
+                handleExportCsv={handleExportCsv}
+              />
+            </div>
+
+            <ResultsDashboard result={result} loading={loading} />
           </div>
-          
-          <ResultsDashboard 
-            result={result} 
-            loading={loading} 
-          />
-        </div>
+        )}
+
+        {/* Tab 2: Policy Navigator & Patient Case */}
+        {activeTab === 'policy' && <PolicyNavigator />}
+
+        {/* Tab 3: ScamCheck */}
+        {activeTab === 'scam' && <ScamCheckTab />}
       </main>
     </ErrorBoundary>
   );

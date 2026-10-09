@@ -8,8 +8,8 @@ import time
 from typing import Any, Optional
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, PlainTextResponse
-from pydantic import BaseModel
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
+from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 from .engine import (
     analyze_insurance_message,
@@ -24,6 +24,16 @@ from .gemma_client import extract_form_data, get_model_status, chat_with_claim
 from .knowledge_loader import get_insurer_knowledge, list_known_insurers
 from .policy_store import MAX_POLICY_PDF_BYTES, get_policy, ingest_policy_pdf, retrieve_policy_pages
 from .gemma_client import answer_with_policy
+from .case_store import (
+    ALLOWED_DOCUMENT_TYPES,
+    DOCUMENT_CATEGORIES,
+    MAX_DOCUMENT_BYTES,
+    create_case,
+    get_case,
+    get_case_document_path,
+    list_cases,
+    save_case_document,
+)
 
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png"}
@@ -222,6 +232,83 @@ async def ask_policy(policy_id: int, payload: PolicyQuestion):
     evidence = retrieve_policy_pages(policy_id, payload.question)
     result = await run_in_threadpool(answer_with_policy, payload.question, evidence)
     return {"policy": policy, **result}
+
+
+class CaseCreateRequest(BaseModel):
+    patient_name: str = Field(min_length=1, max_length=120)
+    age: int | None = Field(default=None, ge=0, le=120)
+    weight_kg: float | None = Field(default=None, gt=0, le=500)
+    blood_group: str | None = Field(default=None, max_length=8)
+    medical_conditions: list[str] = Field(default_factory=list, max_length=40)
+    additional_details: dict[str, str] = Field(default_factory=dict)
+
+
+@app.post("/api/cases", status_code=201)
+def create_case_endpoint(payload: CaseCreateRequest):
+    """Create a local patient case; optional health details are user-provided, never inferred."""
+    details = payload.model_dump(exclude={"patient_name"})
+    case_id = create_case(payload.patient_name, details)
+    return get_case(case_id)
+
+
+@app.get("/api/cases")
+def list_cases_endpoint():
+    return list_cases()
+
+
+@app.get("/api/cases/{case_id}")
+def read_case_endpoint(case_id: int):
+    result = get_case(case_id)
+    if not result:
+        raise HTTPException(status_code=404, detail=f"Case {case_id} not found.")
+    return result
+
+
+@app.post("/api/cases/{case_id}/documents", status_code=201)
+async def upload_case_document(
+    case_id: int,
+    file: UploadFile = File(...),
+    category: str = Form("other"),
+):
+    """Store a case file locally and index policy PDFs for citation-backed questions."""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="A document filename is required.")
+    if category not in DOCUMENT_CATEGORIES:
+        raise HTTPException(status_code=400, detail="Unsupported document category.")
+    if not get_case(case_id):
+        raise HTTPException(status_code=404, detail=f"Case {case_id} not found.")
+    content_type = file.content_type or "application/octet-stream"
+    if content_type not in ALLOWED_DOCUMENT_TYPES:
+        raise HTTPException(status_code=400, detail="Only PDF, JPEG, and PNG files are supported.")
+    contents = await file.read(MAX_DOCUMENT_BYTES + 1)
+    if len(contents) > MAX_DOCUMENT_BYTES:
+        raise HTTPException(status_code=413, detail="Documents must be 20 MB or smaller.")
+
+    policy_id = None
+    if category == "policy":
+        if content_type != "application/pdf":
+            raise HTTPException(status_code=400, detail="Policy documents must be PDF files.")
+        try:
+            indexed = ingest_policy_pdf(contents, file.filename)
+            policy_id = indexed["policy_id"]
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
+        saved = save_case_document(case_id, category, file.filename, content_type, contents, policy_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not saved:
+        raise HTTPException(status_code=404, detail=f"Case {case_id} not found.")
+    return {**saved, "policy": get_policy(policy_id) if policy_id else None, "storage": "local"}
+
+
+@app.get("/api/cases/{case_id}/documents/{document_id}/download")
+def download_case_document(case_id: int, document_id: int):
+    result = get_case_document_path(case_id, document_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    path, filename = result
+    return FileResponse(path, filename=filename)
 
 class ScamCheckRequest(BaseModel):
     message_text: str

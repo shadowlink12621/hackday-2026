@@ -5,6 +5,9 @@ import urllib.request
 import urllib.error
 from typing import Optional, List, Tuple
 from pydantic import BaseModel, Field
+from dotenv import load_dotenv
+
+load_dotenv()
 
 try:
     from google import genai
@@ -180,34 +183,14 @@ def extract_form_data(
 
     # Tier 3: Deterministic Offline Mock
     print("Using offline deterministic mock mode")
-    if domain_mode == "health_insurance":
-        mock_data = ClaimExtraction(
-            provider_name="Apollo Hospitals (MOCKED)",
-            patient_or_employee_name="Rahul Sharma",
-            date_extracted="2026-10-09",
-            currency="INR",
-            items=[
-                LineItem(description="ICU Room Rent (2 days)", amount=20000.0, category="room_rent"),
-                LineItem(description="Surgical Consumables (Gloves, Syringes)", amount=3500.0, category="consumables"),
-                LineItem(description="Surgeon Fee", amount=45000.0, category="doctor_fee"),
-            ],
-            total_extracted=68500.0,
-            confidence_score=0.92,
-        )
-    else:
-        mock_data = ClaimExtraction(
-            provider_name="Starbucks (MOCKED)",
-            patient_or_employee_name="John Doe",
-            date_extracted="2026-10-09",
-            currency="USD",
-            items=[
-                LineItem(description="Venti Latte", amount=6.50, category="meals"),
-                LineItem(description="Croissant", amount=3.50, category="meals"),
-            ],
-            total_extracted=10.00,
-            confidence_score=0.95,
-        )
-    return mock_data, True, "offline_mock"
+    # Never fabricate a plausible-looking claim when no model is reachable.
+    return ClaimExtraction(
+        provider_name="Not extracted",
+        currency="INR",
+        items=[],
+        total_extracted=0.0,
+        confidence_score=0.0,
+    ), True, "offline_mock"
 
 
 def chat_with_claim(claim_json: str, user_question: str) -> str:

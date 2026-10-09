@@ -160,11 +160,23 @@ def get_policy(policy_id: int) -> dict[str, Any] | None:
         "insurer": row[3],
         "imported_at": row[4],
     }
+    # Build this profile from the uploaded policy, not a particular insurer's demo fixture.
     profile_queries = (
-        ("cataract", "Cataract waiting period"),
-        ("refractive error eyesight dioptres", "Vision correction exclusion"),
-        ("OPD frames lenses contact lenses", "OPD and optical expenses"),
-        ("room rent per day sum insured", "Room rent limit"),
+        ("insurer product plan policy wording schedule version", "Policy identity and plan"),
+        ("policy period inception date commencement expiry renewal", "Policy dates and renewal"),
+        ("insured member name proposer relationship family members", "Insured members"),
+        ("sum insured family floater individual cover available balance", "Sum insured and cover structure"),
+        ("pre existing disease PED waiting period years", "Pre-existing condition waiting periods"),
+        ("specific illness disease procedure waiting period", "Specific illness waiting periods"),
+        ("general exclusions permanent exclusions not payable", "Exclusions"),
+        ("room rent ICU limit cap proportionate deduction", "Room rent and ICU limits"),
+        ("co-payment copay deductible threshold percentage", "Co-pay and deductible"),
+        ("network hospital cashless provider hospital criteria", "Hospital network and eligibility"),
+        ("pre hospitalization post hospitalization days", "Pre- and post-hospitalization benefits"),
+        ("OPD outpatient dental optical vision benefit sublimit", "OPD, dental, and vision benefits"),
+        ("consumables non medical items add-on payable", "Consumables and add-ons"),
+        ("claim intimation submission documents discharge deadline reimbursement", "Claim process and required documents"),
+        ("cataract refractive error eyesight lenses", "Eye-care terms"),
     )
     profile = []
     for query, topic in profile_queries:
