@@ -1,12 +1,28 @@
+# Secrets and local environment
+hackday.env
+.env
+.env.*
+!.env.example
+
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+*.pyc
+*.egg-info/
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Build artifacts
 build/
-develop-eggs/
 dist/
+develop-eggs/
 downloads/
 eggs/
 .eggs/
@@ -17,19 +33,13 @@ sdist/
 var/
 wheels/
 share/python-wheels/
-*.egg-info/
-.installed.cfg
 *.egg
 MANIFEST
 
-# Virtual environments
-venv/
-env/
-ENV/
-env.bak/
-venv.bak/
-
 # Node
 node_modules/
-dist/
-.env
+
+# Editors
+.vscode/
+.idea/
+
