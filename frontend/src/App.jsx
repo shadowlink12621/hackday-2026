@@ -22,7 +22,7 @@ const appTabs = [
 ];
 
 function App() {
-  const [activeTab, setActiveTab] = useState('claims');
+  const [activeTab, setActiveTab] = useState('navigator');
   const [file, setFile] = useState(null);
   const [domainMode, setDomainMode] = useState('expense');
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -290,7 +290,7 @@ function App() {
         )}
         {activeTab === 'navigator' && (
           <div id="panel-navigator" className="app-tab-panel" role="tabpanel" aria-labelledby="tab-navigator" tabIndex={0}>
-            <PolicyNavigator />
+              <PolicyNavigator onModelStatusChange={setModelStatus} />
           </div>
         )}
       </main>

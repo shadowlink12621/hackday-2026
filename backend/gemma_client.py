@@ -1,4 +1,5 @@
 import base64
+from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 import re
@@ -687,15 +688,13 @@ def summarize_policy_pages(pages: list[dict], allow_cloud_processing: bool = Fal
             "detail": "No generated policy summary was produced. Review the source-backed topic excerpts instead.",
         }
 
-    model = os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it")
+    model = _cloud_model_name()
     schema_text = json.dumps(PolicySummary.model_json_schema(), ensure_ascii=False)
-    summary_parts = []
     try:
         client = genai.Client(api_key=api_key)
-        # Smaller labeled page batches make sure long policies are actually
-        # considered end to end instead of letting early pages dominate one call.
-        for offset in range(0, len(pages), 10):
-            page_batch = pages[offset : offset + 10]
+        page_batches = [pages[offset : offset + 10] for offset in range(0, len(pages), 10)]
+
+        def summarize_batch(page_batch):
             page_text = "\n\n".join(
                 f"[PDF page {item['page']} of {len(pages)}]\n{item['text']}"
                 for item in page_batch
@@ -725,7 +724,12 @@ SOURCE PAGES:
                     fact.pages = [page for page in fact.pages if page in valid_chunk_pages]
                     if not fact.pages:
                         setattr(chunk_summary, field, None)
-            summary_parts.append(chunk_summary)
+            return chunk_summary
+
+        # Keep the whole document covered, but don't make users wait for each
+        # small page batch to finish serially.
+        with ThreadPoolExecutor(max_workers=min(3, len(page_batches))) as pool:
+            summary_parts = list(pool.map(summarize_batch, page_batches))
 
         summary = PolicySummary()
         list_fields = (

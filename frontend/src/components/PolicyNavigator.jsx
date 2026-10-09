@@ -38,7 +38,7 @@ const STEPS = [
   { id: 'review', label: '4. Summary & questions' },
 ];
 
-export default function PolicyNavigator() {
+export default function PolicyNavigator({ onModelStatusChange }) {
   const [cases, setCases] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [caseData, setCaseData] = useState(null);
@@ -84,7 +84,11 @@ export default function PolicyNavigator() {
         setCases(list);
         setModelStatus(status);
         const savedId = localStorage.getItem('claimguard-selected-case');
-        const first = list.find((item) => String(item.case_id) === savedId) || list[0];
+        const savedCase = list.find((item) => String(item.case_id) === savedId);
+        const first = (savedCase?.document_count ? savedCase : null)
+          || list.find((item) => item.document_count > 0)
+          || savedCase
+          || list[0];
         if (first) return refreshCase(first.case_id);
       })
       .catch((err) => active && setError(err.message));
@@ -122,7 +126,7 @@ export default function PolicyNavigator() {
     if (!patient.patient_name.trim()) return;
     setBusy(true);
     setError('');
-    setNotice('');
+    setNotice(uploadCategory === 'policy' ? 'Reading and indexing policy PDF locally…' : 'Saving document to this case…');
     try {
       const payload = {
         patient_name: patient.patient_name.trim(),
@@ -157,6 +161,7 @@ export default function PolicyNavigator() {
     setError('');
     setNotice('');
     try {
+      const allowCloud = uploadCategory === 'policy' && cloudConsent;
       if (uploadCategory === 'policy') {
         setGeneratedSummary(null);
         setMessages([]);
@@ -165,13 +170,19 @@ export default function PolicyNavigator() {
         caseData.case_id,
         file,
         uploadCategory,
-        uploadCategory === 'policy' && cloudConsent,
+        allowCloud,
       );
       await refreshCase(caseData.case_id);
       if (uploadCategory === 'policy') {
         setPolicyData(response.policy);
         setStep('review');
         setCloudConsent(false);
+        if (allowCloud && response.policy?.policy_id) {
+          setNotice('Policy uploaded and indexed. Gemma is generating the cited outline in the background.');
+          generatePolicySummary(response.policy.policy_id, true)
+            .then(setGeneratedSummary)
+            .catch((err) => setError(`Policy was indexed, but the AI outline failed: ${err.message}`));
+        }
         const indexing = response.indexing;
         const ocrPages = indexing?.ocr_pages?.length || 0;
         const skippedPages = indexing?.image_ocr_consent_needed || [];
@@ -179,7 +190,9 @@ export default function PolicyNavigator() {
           `Indexed ${indexing?.indexed_pages ?? 0} of ${response.policy?.page_count ?? 0} policy pages. ` +
           `${ocrPages ? `Gemma read embedded images on ${ocrPages} page(s). ` : ''}` +
           `${skippedPages.length ? `Images on pages ${skippedPages.join(', ')} were skipped; re-upload with cloud consent to read them. ` : ''}` +
-          'The original file is saved only in this local demo.',
+          allowCloud
+            ? 'The original file is saved locally; AI outline generation continues in the background.'
+            : 'The original file is saved only in this local demo.',
         );
       } else {
         setNotice('Document saved to this case locally. Medical interpretation is not available yet.');
@@ -258,7 +271,13 @@ export default function PolicyNavigator() {
   const handleModelCheck = async () => {
     setModelCheck({ loading: true, detail: 'Checking cloud model connectivity…' });
     try {
-      setModelCheck(await checkModelConnection());
+      const result = await checkModelConnection();
+      setModelCheck(result);
+      if (result.ok) {
+        const status = { ...await getModelStatus(), cloud_verified: true };
+        setModelStatus(status);
+        onModelStatusChange?.(status);
+      }
     } catch (err) {
       setModelCheck({ ok: false, detail: err.message });
     }
@@ -298,6 +317,7 @@ export default function PolicyNavigator() {
       : modelStatus.active_backend === 'local_ollama'
         ? `Local Ollama · ${modelStatus.local_models?.[0] || 'online'}`
         : 'Offline · retrieval only';
+  const cloudReady = Boolean(modelStatus?.cloud_gemma_available || modelStatus?.cloud_gemma_configured);
 
   return (
     <section className="case-workflow">
@@ -429,12 +449,12 @@ export default function PolicyNavigator() {
                 <div><dt>Profile facts found</dt><dd>{policyData.profile?.length || 0}</dd></div>
               </dl>
               <label className="consent-line"><input type="checkbox" checked={cloudConsent} onChange={(event) => setCloudConsent(event.target.checked)} />
-                I consent to send the redacted policy text to Gemma 4 for cited answers and a full policy outline. Redaction may miss sensitive details.
+                I consent to send policy wording and insured-member names to Gemma 4 for cited answers and an outline. Phone, email, and government IDs are masked where detected.
               </label>
-              <button type="button" className="primary-button" onClick={handleSummary} disabled={!cloudConsent || !modelStatus?.cloud_gemma_configured || busy}>
-                Generate cited policy outline
+              <button type="button" className="primary-button summary-action" onClick={handleSummary} disabled={!cloudConsent || !cloudReady || busy}>
+                {busy ? 'Generating outline…' : 'Generate cited policy outline'}
               </button>
-              {!modelStatus?.cloud_gemma_configured && <p className="runtime-note">Gemma 4 is not configured on the backend. Set GEMINI_API_KEY there, restart it, and test the connection.</p>}
+              {!cloudReady && <p className="runtime-note">Gemma is not configured on the backend. Set its API key there, restart it, and test the connection.</p>}
               <div className="model-connection-check">
                 <button type="button" className="secondary-button" onClick={handleModelCheck} disabled={modelCheck?.loading}>
                   {modelCheck?.loading ? 'Checking…' : 'Test AI connection'}
@@ -451,7 +471,10 @@ export default function PolicyNavigator() {
                   {fact.pages.map((page, index) => (
                     <div className="source-excerpt" key={`${fact.topic}-${page}-${index}`}>
                       <a href={`${getCaseDocumentUrl(caseData.case_id, policyDocument.document_id)}#page=${page}`} onClick={(event) => openCaseDocument(event, caseData.case_id, policyDocument.document_id, page)}>PDF page {page}</a>
-                      <p>{fact.evidence[index]}</p>
+                      <details className="source-detail">
+                        <summary>View source wording</summary>
+                        <p>{fact.evidence[index]}</p>
+                      </details>
                     </div>
                   ))}
                 </article>
@@ -473,7 +496,9 @@ export default function PolicyNavigator() {
             <div className="eyebrow">POLICY Q&amp;A</div>
             <h2>Ask about this document</h2>
             <p className="muted-copy">Answers use retrieved clauses and show their PDF pages. They are not a coverage decision.</p>
-            <p className="runtime-note">With consent and a working backend key, Gemma 4 answers from retrieved policy pages. Otherwise, answers show source passages only.</p>
+            <label className="consent-line chat-consent"><input type="checkbox" checked={cloudConsent} onChange={(event) => setCloudConsent(event.target.checked)} />
+              Allow Gemma 4 to answer using retrieved policy text. Answers are not coverage decisions.
+            </label>
 
             {messages.length === 0 && (
               <div style={{ margin: '14px 0' }}>
@@ -534,6 +559,12 @@ export default function PolicyNavigator() {
 function GeneratedSummary({ result }) {
   if (!result.summary) return <p className="runtime-note">{result.detail || 'No generated summary returned.'}</p>;
   const sourceMap = new Map((result.sources || []).map((item) => [item.page, item.text]));
+  const labels = {
+    insurer: 'Insurer', policy_name: 'Policy name', policy_type: 'Policy type', policy_period: 'Policy period',
+    sum_insured: 'Sum insured', insured_members: 'Insured members', benefits: 'Benefits', sub_limits: 'Sub-limits',
+    waiting_periods: 'Waiting periods', exclusions: 'Exclusions', claim_requirements: 'Claim requirements',
+    network_terms: 'Network terms', uncertainties: 'Items to verify',
+  };
   const items = Object.entries(result.summary).flatMap(([group, value]) => {
     if (!value) return [];
     const facts = Array.isArray(value) ? value : [value];
@@ -542,11 +573,12 @@ function GeneratedSummary({ result }) {
   return (
     <div className="generated-summary">
       <h3>Model outline · {result.model_used}</h3>
+      {items.length === 0 && <p className="runtime-note">No policy facts were returned. Check the source pages and try generating the outline again.</p>}
       {items.map((item) => (
         <article key={`${item.group}-${item.index}-${item.fact}`}>
-          <strong>{item.group.replaceAll('_', ' ')}</strong>
+                  <strong>{labels[item.group] || item.group.replaceAll('_', ' ')}</strong>
           <p>{item.fact}</p>
-          {item.pages.map((page) => <details key={page}><summary>PDF page {page}</summary><p>{sourceMap.get(page) || 'Source text unavailable.'}</p></details>)}
+          {item.pages?.length > 0 && <details><summary>Evidence · PDF {item.pages.map((page) => `p. ${page}`).join(', ')}</summary>{item.pages.map((page) => <p className="summary-source" key={page}>{sourceMap.get(page) || `Open PDF page ${page} to verify this fact.`}</p>)}</details>}
           {item.uncertainty && <small>Needs verification: {item.uncertainty}</small>}
         </article>
       ))}

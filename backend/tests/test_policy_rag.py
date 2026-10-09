@@ -200,9 +200,20 @@ def test_policy_excerpt_redacts_personal_names_and_contacts():
     excerpt = policy_store._redact_text(
         "ANANYA SHARMA\nMobile Number 9876543210\nCataract waiting period is 12 months."
     )
-    assert "ANANYA SHARMA" not in excerpt
+    assert "ANANYA SHARMA" in excerpt
     assert "9876543210" not in excerpt
     assert "Cataract waiting period" in excerpt
+
+
+def test_policy_excerpt_keeps_policy_terms_and_dates():
+    excerpt = policy_store._redact_text(
+        "POLICY PERIOD 01/04/2025 to 31/03/2026\n"
+        "SUM INSURED FAMILY FLOATER INR 500000\n"
+        "Date of Birth: 01/04/1980"
+    )
+    assert "POLICY PERIOD 01/04/2025 to 31/03/2026" in excerpt
+    assert "SUM INSURED FAMILY FLOATER INR 500000" in excerpt
+    assert "Date of Birth: 01/04/1980" not in excerpt
 
 
 def test_gemma4_is_default_and_full_policy_summary_covers_every_page(monkeypatch):

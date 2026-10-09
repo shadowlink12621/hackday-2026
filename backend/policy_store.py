@@ -21,8 +21,7 @@ STOP_WORDS = {
     "coverage", "amount", "sum", "limit", "limits", "benefit", "section",
 }
 SENSITIVE_LABELS = re.compile(
-    r"\b(insured name|patient name|member name|insured person details|primary insured|"
-    r"member id|date of birth|\bdob\b|\bgender\b|\boccupation\b|nominee|"
+    r"\b(member id|date of birth|\bdob\b|\bgender\b|\boccupation\b|nominee|"
     r"mobile number|phone number|e-?mail|address|pan no|aadhaar|policy number|"
     r"certificate number|abha number)\b",
     re.IGNORECASE,
@@ -32,10 +31,7 @@ SENSITIVE_LABELS = re.compile(
 def _redact_text(text: str) -> str:
     """Remove common direct identifiers before excerpts leave the local store."""
     safe_lines = [
-        "[personal detail redacted]"
-        if SENSITIVE_LABELS.search(line)
-        or re.fullmatch(r"\s*[A-Z][A-Z.'-]{1,}(?:\s+[A-Z][A-Z.'-]{1,}){1,3}\s*", line)
-        else line
+        "[personal detail redacted]" if SENSITIVE_LABELS.search(line) else line
         for line in text.splitlines()
     ]
     safe_text = "\n".join(safe_lines)
@@ -43,7 +39,11 @@ def _redact_text(text: str) -> str:
     safe_text = re.sub(r"(?<!\d)(?:\+?91[ -]?)?[6-9]\d{9}(?!\d)", "[phone redacted]", safe_text)
     safe_text = re.sub(r"\b[A-Z]{5}\d{4}[A-Z]\b", "[identifier redacted]", safe_text, flags=re.IGNORECASE)
     safe_text = re.sub(r"\b\d{12}\b", "[identifier redacted]", safe_text)
-    safe_text = re.sub(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b", "[date redacted]", safe_text)
+    safe_text = re.sub(
+        r"(?im)^(\s*(?:date of birth|dob|birth date)\s*[:=-]\s*)\d{1,2}[/-]\d{1,2}[/-]\d{2,4}",
+        r"\1[date redacted]",
+        safe_text,
+    )
     return safe_text
 
 
@@ -107,6 +107,7 @@ def ingest_policy_pdf(
     image_inputs = [
         (page["page"], image["bytes"], image["mime_type"])
         for page in extracted_pages
+        if not page["text"].strip()
         for image in page["images"]
     ]
     image_pages = {page["page"] for page in extracted_pages if page["images"]}

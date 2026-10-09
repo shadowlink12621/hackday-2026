@@ -1,11 +1,20 @@
-const API_ORIGIN = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/+$/, '');
+const API_ORIGIN = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
 const API = `${API_ORIGIN}/api`;
 
 async function request(path, options = {}) {
   const token = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('claimguard_access_token') : '';
   const headers = new Headers(options.headers || {});
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  const response = await fetch(`${API}${path}`, { ...options, headers });
+  let response;
+  try {
+    response = await fetch(`${API}${path}`, { ...options, headers });
+  } catch (error) {
+    if (error instanceof TypeError) {
+      const backend = API_ORIGIN || (typeof window !== 'undefined' ? window.location.origin : 'this page');
+      throw new Error(`Cannot reach the ClaimGuard API at ${backend}. Check that the backend is running and reload the page.`);
+    }
+    throw error;
+  }
   if (!response.ok) {
     let message = `Request failed (${response.status})`;
     try {

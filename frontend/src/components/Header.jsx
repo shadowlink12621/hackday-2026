@@ -4,7 +4,9 @@ function modelBadge(modelStatus) {
   if (!modelStatus) return { className: 'model-status-unavailable', label: 'AI STATUS UNAVAILABLE', detail: 'Backend model status has not loaded' };
   switch (modelStatus.active_backend) {
     case 'cloud_gemma':
-      return { className: 'model-status-gemma', label: 'CLOUD KEY CONFIGURED', detail: `${modelStatus.cloud_model || 'Google GenAI'} · connection not verified` };
+      return modelStatus.cloud_verified
+        ? { className: 'model-status-gemma', label: 'GEMMA CONNECTION VERIFIED', detail: `${modelStatus.cloud_model || 'Google GenAI'} · live request succeeded` }
+        : { className: 'model-status-gemma', label: 'CLOUD KEY CONFIGURED', detail: `${modelStatus.cloud_model || 'Google GenAI'} · run the live check in Policy Navigator` };
     case 'local_ollama':
       return { className: 'model-status-local', label: 'OLLAMA · ONLINE', detail: modelStatus.local_models?.[0] || 'Local model' };
     default:
