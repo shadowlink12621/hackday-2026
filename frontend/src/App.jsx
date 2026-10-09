@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { validateDocument } from './api';
+import { processDocument } from './api';
 import './index.css';
 
 function App() {
@@ -49,26 +49,45 @@ function App() {
     setError(null);
     
     try {
-      const data = await validateDocument(file);
+      const data = await processDocument(file);
       setResult(data);
     } catch (err) {
-      setError(err.message || 'Failed to connect to the validation engine.');
+      setError(err.message || 'Failed to connect to the backend.');
     } finally {
       setLoading(false);
     }
   };
 
+  const exportToCSV = () => {
+    if (!result || !result.perception.structured_data.items) return;
+    const items = result.perception.structured_data.items;
+    
+    const header = ['Description', 'Amount'];
+    const rows = items.map(item => [`"${item.description}"`, item.amount]);
+    const csvContent = [header, ...rows].map(e => e.join(",")).join("\n");
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "receipt_items.csv");
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <>
       <header>
-        <h1>DocuGuard</h1>
-        <p>Gemma 4 Multimodal Document Validator & Agent Skill</p>
+        <h1>ClaimGuard</h1>
+        <p>Enterprise AI Agent for Expense Validation</p>
       </header>
       
       <main className="container">
         {/* Left Panel: Input */}
         <section className="panel">
-          <h2>Input Document</h2>
+          <h2>Input Receipt</h2>
           
           <div 
             className="upload-area"
@@ -85,11 +104,11 @@ function App() {
             />
             
             {previewUrl ? (
-              <img src={previewUrl} alt="Document Preview" className="preview-image" />
+              <img src={previewUrl} alt="Receipt Preview" className="preview-image" />
             ) : (
               <>
-                <div className="upload-icon">📄</div>
-                <p>Drag and drop a document here</p>
+                <div className="upload-icon">🧾</div>
+                <p>Drag and drop a receipt here</p>
                 <p className="data-label" style={{marginTop: '0.5rem', fontSize: '0.8rem'}}>or click to browse</p>
               </>
             )}
@@ -100,56 +119,95 @@ function App() {
             onClick={handleAnalyze} 
             disabled={!file || loading}
           >
-            {loading ? <span className="loader"></span> : 'Analyze Document'}
+            {loading ? <span className="loader"></span> : 'Process Receipt'}
           </button>
           
           {error && <div style={{color: 'var(--error)', marginTop: '1rem', textAlign: 'center'}}>{error}</div>}
         </section>
         
-        {/* Right Panel: Output & Telemetry */}
-        <section className="panel">
-          <h2>Telemetry & Validation</h2>
+        {/* Right Panel: Output & Dashboard */}
+        <section className="panel" style={{ overflowY: 'auto' }}>
+          <h2>Results Dashboard</h2>
           
           <div className="results">
             {!result && !loading && (
               <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)'}}>
-                Upload a document to see Gemma 4 and deterministic engine results.
+                Upload a receipt to see AI extraction and validation results.
               </div>
             )}
             
             {loading && (
               <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--accent)'}}>
                 <div className="loader" style={{width: '40px', height: '40px', borderWidth: '4px', marginBottom: '1rem'}}></div>
-                <p>Gemma 4 is processing the document...</p>
+                <p>Gemma 4 is processing...</p>
               </div>
             )}
 
             {result && (
               <>
-                {/* AI Perception (Gemma 4) */}
+                {/* Glowing Badge for Overall Status */}
+                <div className={`status-badge ${result.verification.is_valid ? 'valid' : 'invalid'}`}>
+                  {result.verification.is_valid ? 'APPROVED' : 'FLAGGED'}
+                </div>
+
+                {/* Extracted Data summary */}
                 <div className="section-card">
-                  <h3>🧠 Gemma 4 Perception (JSON Schema)</h3>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <h3 style={{ margin: 0 }}>🧠 Gemma 4 Extracted Data</h3>
+                    <span className="data-label" style={{ fontSize: '0.8rem' }}>Model: {result.metadata.model_used}</span>
+                  </div>
+                  
                   <div className="data-row">
-                    <span className="data-label">Document Type</span>
-                    <span className="data-value">{result.perception.document_type}</span>
+                    <span className="data-label">Vendor Name</span>
+                    <span className="data-value">{result.perception.structured_data.vendor_name}</span>
                   </div>
                   <div className="data-row">
                     <span className="data-label">Date Extracted</span>
-                    <span className="data-value">{result.perception.date_extracted || 'None'}</span>
+                    <span className="data-value">{result.perception.structured_data.date_extracted}</span>
                   </div>
                   <div className="data-row">
-                    <span className="data-label">Confidence</span>
-                    <span className="data-value" style={{color: result.perception.confidence_score >= 0.7 ? 'var(--success)' : 'var(--error)'}}>
-                      {(result.perception.confidence_score * 100).toFixed(0)}%
-                    </span>
+                    <span className="data-label">Total Amount</span>
+                    <span className="data-value">{result.perception.structured_data.total_extracted} {result.perception.structured_data.currency}</span>
+                  </div>
+                  <div className="data-row">
+                    <span className="data-label">Final Amount (INR)</span>
+                    <span className="data-value" style={{ color: 'var(--accent)' }}>₹{result.verification.final_amount_inr}</span>
                   </div>
                 </div>
 
-                {/* Deterministic Verification (Code) */}
-                <div className="section-card" style={{flex: 1}}>
-                  <h3>⚙️ Deterministic Rule Verification</h3>
-                  <div style={{marginTop: '1rem'}}>
-                    {result.validation.results.map((rule, idx) => (
+                {/* Line Items Table */}
+                <div className="section-card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <h3 style={{ margin: 0 }}>🛒 Line Items</h3>
+                    <button className="btn" style={{ margin: 0, padding: '0.5rem 1rem', fontSize: '0.9rem' }} onClick={exportToCSV}>
+                      Export to CSV
+                    </button>
+                  </div>
+                  <div className="table-container">
+                    <table className="items-table">
+                      <thead>
+                        <tr>
+                          <th>Description</th>
+                          <th style={{ textAlign: 'right' }}>Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {result.perception.structured_data.items.map((item, idx) => (
+                          <tr key={idx}>
+                            <td>{item.description}</td>
+                            <td style={{ textAlign: 'right' }}>{item.amount.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Deterministic Verification Results */}
+                <div className="section-card">
+                  <h3 style={{ marginBottom: '1rem' }}>⚙️ Engine Verification</h3>
+                  <div>
+                    {result.verification.results.map((rule, idx) => (
                       <div key={idx} className={`rule-item ${rule.passed ? 'pass' : 'fail'}`}>
                         <div className="rule-icon">{rule.passed ? '✅' : '❌'}</div>
                         <div className="rule-content">
@@ -159,10 +217,6 @@ function App() {
                       </div>
                     ))}
                   </div>
-                </div>
-
-                <div className={`status-badge ${result.validation.is_valid ? 'valid' : 'invalid'}`}>
-                  {result.validation.is_valid ? 'DOCUMENT ACCEPTED' : 'DOCUMENT REJECTED'}
                 </div>
               </>
             )}
