@@ -1,4 +1,6 @@
 import React from 'react';
+import ChatInterface from './ChatInterface';
+import AnalyticsChart from './AnalyticsChart';
 
 export default function ResultsDashboard({ result, loading }) {
   return (
@@ -106,6 +108,12 @@ export default function ResultsDashboard({ result, loading }) {
                 ))}
               </tbody>
             </table>
+          </div>
+          
+          <AnalyticsChart items={result.perception.structured_data.items} />
+          
+          <div style={{ marginTop: '32px' }}>
+             <ChatInterface claimId={result.claim_id} />
           </div>
         </>
       )}

@@ -52,3 +52,13 @@ export async function getAuditCsv() {
   const response = await request('/export.csv');
   return response.blob();
 }
+
+export async function sendChat(claimId, question) {
+  const response = await request('/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ claim_id: claimId, question }),
+  });
+  return response.json();
+}
+

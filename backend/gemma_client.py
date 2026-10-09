@@ -101,3 +101,21 @@ def extract_form_data(file_bytes: bytes, mime_type: str, user_prompt: str, domai
             confidence_score=0.95,
         )
     return mock_data, True
+
+def chat_with_claim(claim_json: str, user_question: str) -> str:
+    """Uses Gemma to answer questions about a specific claim."""
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if HAS_GENAI and api_key:
+        try:
+            client = genai.Client(api_key=api_key)
+            model = os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it")
+            prompt = f"You are a helpful assistant analyzing a claim.\n\nCLAIM DATA:\n{claim_json}\n\nUSER QUESTION:\n{user_question}"
+            response = client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=types.GenerateContentConfig(temperature=0.3)
+            )
+            return response.text
+        except Exception as e:
+            return f"Error communicating with AI: {e}"
+    return "Mock Response: This looks like a valid claim. The amounts seem reasonable based on standard rates."
