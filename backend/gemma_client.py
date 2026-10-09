@@ -30,6 +30,10 @@ class ClaimExtraction(BaseModel):
     confidence_score: float = Field(default=0.9, ge=0.0, le=1.0, description="Model-reported estimate between 0.0 and 1.0")
 
 
+class CloudModelError(RuntimeError):
+    """Raised when configured cloud inference fails instead of returning fake claim data."""
+
+
 def get_model_status() -> dict:
     """Checks and returns the status of Cloud Gemma, Local Ollama, and Offline Mock."""
     cloud_key = bool(os.environ.get("GEMINI_API_KEY"))
@@ -155,6 +159,9 @@ def extract_form_data(
         if ollama_extracted:
             return ollama_extracted, False, f"local_ollama ({os.environ.get('OLLAMA_MODEL', 'gemma2')})"
 
+    if not force_mock and api_key and has_content and not use_local_llm and not HAS_GENAI:
+        raise CloudModelError("Gemma is configured, but the Google GenAI SDK is unavailable. Restart the backend after installing its requirements.")
+
     # Tier 2: Cloud Google GenAI (Gemma 4 multimodal extraction)
     if not force_mock and HAS_GENAI and api_key and has_content and not use_local_llm:
         try:
@@ -171,9 +178,12 @@ def extract_form_data(
 
             TASK:
             Analyze this uploaded document.
-            If it's an expense receipt: Extract the vendor name, date, currency, line items (with categories like 'meals', 'transport'), and total.
-            If it's an Indian health insurance bill: Extract the hospital name (provider), patient name, date, currency (usually INR). For line items, carefully categorize them as 'room_rent', 'pharmacy', 'consumables', 'doctor_fee', etc. Extract the total.
+            If it's an expense receipt: Extract the vendor name, date, currency, line items (with categories like 'meals', 'transport'), and total. Use INR when the currency symbol or code is not visible.
+            If it's an Indian health insurance bill: Extract the hospital name (provider), patient name, date, currency (usually INR). For line items, carefully categorize them as 'room_rent', 'pharmacy', 'consumables', 'doctor_fee', etc. Extract the total. Use INR when no other currency is visible.
             Provide a confidence score estimate between 0.0 and 1.0.
+
+            Return ONLY one JSON object with this shape; use null for unavailable names or dates and an empty array when no line items are legible:
+            {{"provider_name":"vendor or hospital","patient_or_employee_name":null,"date_extracted":null,"currency":"INR","items":[{{"description":"item","amount":0.0,"category":"other"}}],"total_extracted":0.0,"confidence_score":0.0}}
             """
 
             contents = []
@@ -184,17 +194,44 @@ def extract_form_data(
             response = client.models.generate_content(
                 model=model_name,
                 contents=contents,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=ClaimExtraction,
-                    temperature=0.1,
-                ),
             )
 
-            parsed = ClaimExtraction.model_validate_json(response.text)
+            response_text = (response.text or "").strip()
+            if response_text.startswith("```"):
+                response_text = response_text.split("\n", 1)[-1]
+                if response_text.rstrip().endswith("```"):
+                    response_text = response_text.rstrip()[:-3].strip()
+            if not response_text.startswith("{"):
+                json_start = response_text.find("{")
+                json_end = response_text.rfind("}")
+                if json_start >= 0 and json_end > json_start:
+                    response_text = response_text[json_start : json_end + 1]
+            raw_extraction = json.loads(response_text)
+            if not isinstance(raw_extraction, dict):
+                raise ValueError("Gemma returned a response that was not a JSON object.")
+            # Gemma may use JSON null for fields that are optional in practice;
+            # normalize those values before validating our stable API schema.
+            if not raw_extraction.get("provider_name"):
+                raw_extraction["provider_name"] = "Unknown provider"
+            if not raw_extraction.get("currency"):
+                raw_extraction["currency"] = "INR"
+            if raw_extraction.get("items") is None:
+                raw_extraction["items"] = []
+            if raw_extraction.get("confidence_score") is None:
+                raw_extraction["confidence_score"] = 0.5
+            if raw_extraction.get("total_extracted") is None:
+                raw_extraction["total_extracted"] = sum(
+                    float(item.get("amount", 0) or 0)
+                    for item in raw_extraction["items"]
+                    if isinstance(item, dict)
+                )
+            parsed = ClaimExtraction.model_validate(raw_extraction)
             return parsed, False, f"cloud_gemma ({model_name})"
         except Exception as e:
-            print(f"GenAI extraction failed ({type(e).__name__}): {e}. Trying local or fallback mock.")
+            print(f"Gemma extraction failed ({type(e).__name__}): {e}")
+            raise CloudModelError(
+                "Gemma could not analyze this file. Check the API key, model access, and backend logs, then try again. No mock result was created."
+            ) from e
 
     # Tier 1.5: If Cloud GenAI failed and we didn't try Ollama yet, try Ollama now
     if not force_mock and not use_local_llm and has_content:

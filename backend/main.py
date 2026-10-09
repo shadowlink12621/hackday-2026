@@ -50,7 +50,7 @@ from .engine import (
     save_claim,
     update_claim_decision,
 )
-from .gemma_client import extract_form_data, get_model_status, chat_with_claim
+from .gemma_client import CloudModelError, extract_form_data, get_model_status, chat_with_claim
 from .knowledge_loader import get_insurer_knowledge, list_known_insurers
 from .policy_store import MAX_POLICY_PDF_BYTES, get_policy, ingest_policy_pdf, retrieve_policy_pages
 from .policy.chat import answer as answer_with_policy
@@ -145,6 +145,8 @@ async def process_request(
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except CloudModelError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     validation_result = run_deterministic_checks(extracted_data, contents, rule_settings, domain_mode)
 
     claim_id = save_claim(domain_mode, extracted_data, validation_result)
