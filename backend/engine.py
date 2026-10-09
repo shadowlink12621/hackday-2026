@@ -11,6 +11,17 @@ def init_db():
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS receipts 
                  (hash TEXT PRIMARY KEY, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+    
+    # New table to store full claims for the dashboard workflow
+    c.execute('''CREATE TABLE IF NOT EXISTS claims
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  domain TEXT,
+                  total_inr REAL,
+                  is_valid BOOLEAN,
+                  status TEXT DEFAULT 'Pending',
+                  extracted_json TEXT,
+                  verification_json TEXT,
+                  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
     conn.commit()
     conn.close()
 
@@ -29,6 +40,51 @@ class ValidationResult(BaseModel):
 def get_exchange_rate(currency: str) -> float:
     rates = {"USD": 83.5, "EUR": 90.0, "INR": 1.0}
     return rates.get(currency.upper(), 1.0)
+
+def save_claim(domain: str, extracted_data, validation: ValidationResult) -> int:
+    """Saves the processed claim to the database and returns the ID."""
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute('''INSERT INTO claims (domain, total_inr, is_valid, extracted_json, verification_json)
+                 VALUES (?, ?, ?, ?, ?)''', 
+              (domain, validation.final_amount_inr, validation.is_valid, 
+               extracted_data.model_dump_json(), validation.model_dump_json()))
+    claim_id = c.lastrowid
+    conn.commit()
+    conn.close()
+    return claim_id
+
+def get_all_claims():
+    """Retrieves all claims from the DB."""
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute("SELECT * FROM claims ORDER BY id DESC")
+    rows = c.fetchall()
+    conn.close()
+    
+    claims = []
+    for r in rows:
+        claims.append({
+            "id": r["id"],
+            "domain": r["domain"],
+            "total_inr": r["total_inr"],
+            "is_valid": bool(r["is_valid"]),
+            "status": r["status"],
+            "extracted_data": json.loads(r["extracted_json"]),
+            "verification_data": json.loads(r["verification_json"]),
+            "timestamp": r["timestamp"]
+        })
+    return claims
+
+def update_claim_decision(claim_id: int, decision: str):
+    """Updates a claim's status (Approved/Rejected)."""
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("UPDATE claims SET status = ? WHERE id = ?", (decision, claim_id))
+    conn.commit()
+    conn.close()
+    return True
 
 def run_deterministic_checks(extracted_data, image_bytes: bytes, rule_settings_json: str, domain_mode: str) -> ValidationResult:
     results = []
@@ -67,11 +123,8 @@ def run_deterministic_checks(extracted_data, image_bytes: bytes, rule_settings_j
     final_amount_inr = calculated_total * exchange_rate
     
     if domain_mode == "health_insurance":
-        # Specific Indian Health Insurance Rules
-        # e.g., Room rent capped at 1% of a standard 5L sum insured = 5000/day. Let's hardcode a check for demo.
         room_rent_items = [item for item in extracted_data.items if item.category == "room_rent"]
         if room_rent_items:
-            # Assuming amount is total room rent. Let's just flag if > 10000 for demo
             room_total = sum(i.amount for i in room_rent_items) * exchange_rate
             if room_total > 10000:
                 results.append(RuleResult(rule_name="Room Rent Cap", passed=False, message=f"Room rent {room_total} INR exceeds standard cap. Requires manual review."))
@@ -85,14 +138,12 @@ def run_deterministic_checks(extracted_data, image_bytes: bytes, rule_settings_j
             results.append(RuleResult(rule_name="Consumables Check", passed=True, message="No non-medical consumables found."))
             
     else:
-        # Standard Expense Receipt Logic
         msg = f"Converted {calculated_total} {extracted_data.currency} to {final_amount_inr} INR."
         if final_amount_inr <= policy_limit_inr:
             results.append(RuleResult(rule_name="Policy Limit", passed=True, message=f"{msg} Within policy limit of ₹{policy_limit_inr}."))
         else:
             results.append(RuleResult(rule_name="Policy Limit", passed=False, message=f"{msg} EXCEEDS policy limit of ₹{policy_limit_inr}!"))
         
-    # Aggregate result
     is_valid = all(r.passed for r in results)
     
     return ValidationResult(is_valid=is_valid, final_amount_inr=final_amount_inr, results=results)

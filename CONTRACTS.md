@@ -1,55 +1,41 @@
 # API Contracts
 
 ## `POST /api/process`
-
+Upload an image and run extraction + validation.
 **Request (FormData):**
-- `prompt` (string): Context or user request.
-- `file` (File, optional): Image or document upload (`.jpg`, `.png`).
-- `domain_mode` (string, default: "receipts"): The archetype domain.
-- `rule_settings` (JSON string): e.g. `{"policy_limit_inr": 4000.0}`.
+- `prompt` (string)
+- `file` (File, optional): `.jpg` or `.png`
+- `domain_mode` (string): `"expense"` or `"health_insurance"`
+- `rule_settings` (JSON string)
 
 **Response (JSON):**
+Returns `claim_id` along with `metadata`, `perception` (extracted JSON), and `verification` (passed/failed rules).
+
+## `GET /api/claims`
+Fetch all processed claims for the dashboard.
+**Response (JSON Array):**
 ```json
-{
-  "metadata": {
-    "model_used": "gemini-2.5-flash",
-    "is_fallback_mock": false,
-    "latency_ms": 1250,
-    "timestamp": "2026-10-09T10:00:00Z"
-  },
-  "perception": {
-    "structured_data": {
-      "vendor_name": "Starbucks",
-      "date_extracted": "2026-10-09",
-      "currency": "USD",
-      "items": [
-        {"description": "Coffee", "amount": 5.0}
-      ],
-      "total_extracted": 5.0,
-      "confidence_score": 0.95
-    },
-    "confidence": 0.95
-  },
-  "verification": {
+[
+  {
+    "id": 1,
+    "domain": "expense",
+    "total_inr": 417.5,
     "is_valid": true,
-    "final_amount_inr": 417.5,
-    "results": [
-      {
-        "rule_name": "Fraud Detection",
-        "passed": true,
-        "message": "Receipt hash is unique."
-      },
-      {
-        "rule_name": "Math Verification",
-        "passed": true,
-        "message": "Line items sum perfectly to 5.0."
-      },
-      {
-        "rule_name": "Policy Limit",
-        "passed": true,
-        "message": "Converted 5.0 USD to 417.5 INR. Within policy limit of ₹4000.0."
-      }
-    ]
+    "status": "Pending",
+    "extracted_data": { ... },
+    "verification_data": { ... },
+    "timestamp": "2026-10-09 10:00:00"
   }
-}
+]
 ```
+
+## `POST /api/claims/{claim_id}/decision`
+Record a manager's final approval/rejection.
+**Request (JSON):**
+```json
+{ "decision": "Approved" } // or "Rejected"
+```
+**Response (JSON):** `{"status": "success", "claim_id": 1, "decision": "Approved"}`
+
+## `GET /api/export.csv`
+Downloads a CSV audit report of all claims.

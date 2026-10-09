@@ -1,8 +1,12 @@
-from fastapi import FastAPI, File, UploadFile, Form
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+from fastapi.responses import PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from .gemma_client import extract_form_data
-from .engine import run_deterministic_checks
+from .engine import run_deterministic_checks, save_claim, get_all_claims, update_claim_decision
 import time
+import csv
+from io import StringIO
+from pydantic import BaseModel
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -24,26 +28,24 @@ def health_check():
 async def process_request(
     prompt: str = Form(...),
     file: Optional[UploadFile] = File(None),
-    domain_mode: str = Form("expense"), # 'expense' or 'health_insurance'
+    domain_mode: str = Form("expense"), 
     rule_settings: str = Form("{}")
 ):
-    """
-    Main endpoint for ClaimGuard (Universal Claims).
-    """
     start_time = time.time()
     
     contents = await file.read() if file else b""
     mime_type = file.content_type if file else "text/plain"
     
-    # Phase 1: AI Perception
     extracted_data, is_mock = extract_form_data(contents, mime_type, prompt, domain_mode)
-    
-    # Phase 2: Code Validation (Math, Fraud, and Domain Rules)
     validation = run_deterministic_checks(extracted_data, contents, rule_settings, domain_mode)
+    
+    # NEW: Save the claim to SQLite and get an ID
+    claim_id = save_claim(domain_mode, extracted_data, validation)
     
     latency_ms = int((time.time() - start_time) * 1000)
     
     return {
+        "claim_id": claim_id,
         "metadata": {
             "model_used": "gemini-2.5-flash",
             "is_fallback_mock": is_mock,
@@ -57,3 +59,41 @@ async def process_request(
         },
         "verification": validation.model_dump()
     }
+
+@app.get("/api/claims")
+def list_claims():
+    """Returns all claims stored in the database."""
+    return get_all_claims()
+
+class DecisionRequest(BaseModel):
+    decision: str # "Approved" or "Rejected"
+
+@app.post("/api/claims/{claim_id}/decision")
+def record_decision(claim_id: int, payload: DecisionRequest):
+    """Records a manager's final decision for a claim."""
+    if payload.decision not in ["Approved", "Rejected"]:
+        raise HTTPException(status_code=400, detail="Invalid decision. Use 'Approved' or 'Rejected'.")
+    
+    success = update_claim_decision(claim_id, payload.decision)
+    return {"status": "success", "claim_id": claim_id, "decision": payload.decision}
+
+@app.get("/api/export.csv", response_class=PlainTextResponse)
+def export_claims_csv():
+    """Generates a CSV export of all claims for auditing."""
+    claims = get_all_claims()
+    
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["ID", "Timestamp", "Domain", "Total_INR", "System_Valid", "Manager_Status", "Vendor/Hospital"])
+    
+    for c in claims:
+        vendor = c["extracted_data"].get("provider_name", "")
+        writer.writerow([
+            c["id"], c["timestamp"], c["domain"], c["total_inr"], 
+            c["is_valid"], c["status"], vendor
+        ])
+        
+    response = output.getvalue()
+    return PlainTextResponse(response, media_type="text/csv", headers={
+        "Content-Disposition": "attachment; filename=claimguard_audit.csv"
+    })
