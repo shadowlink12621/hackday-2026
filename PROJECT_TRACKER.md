@@ -21,11 +21,12 @@ This document serves as the single source of truth for tracking progress across 
 - [x] Implement `GET /api/export.csv` (Download audit report).
 - [x] Standardize API endpoints (e.g. `/api/validate`) and JSON payload names (`validation`) across backend and `CONTRACTS.md`.
 
-### Stage 3: Hardening & Edge Cases ⏳
+### Stage 3: Hardening & Edge Cases ✅ (DONE by Antigravity)
 - [x] Add strict file-size validation (reject files > 5MB) and MIME-type checks (`.jpg`, `.png` only) to the FastAPI validation endpoint.
-- [ ] Add exception handling for `sqlite3.OperationalError` (database is locked).
-- [ ] Expand `backend/tests/test_engine.py` to test the new `/api/claims` and `/api/export.csv` endpoints.
-- [ ] Final code cleanup and PEP8 formatting.
+- [x] Add exception handling for `sqlite3.OperationalError` (database is locked) and retry decorator.
+- [x] Expand `backend/tests/test_engine.py` to test the new `/api/claims` and `/api/export.csv` endpoints.
+- [x] Final code cleanup and PEP8 formatting.
+
 
 ---
 

@@ -1,15 +1,16 @@
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException
-from fastapi.responses import PlainTextResponse
-from fastapi.middleware.cors import CORSMiddleware
-from .gemma_client import extract_form_data
-from .engine import run_deterministic_checks, save_claim, get_all_claims, update_claim_decision
-import time
 import csv
-from io import StringIO
-from pydantic import BaseModel
 from datetime import datetime, timezone
-from typing import Optional
+from io import StringIO
 import os
+import sqlite3
+import time
+from typing import Optional
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, PlainTextResponse
+from pydantic import BaseModel
+from .engine import get_all_claims, run_deterministic_checks, save_claim, update_claim_decision
+from .gemma_client import extract_form_data
 
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png"}
@@ -24,9 +25,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.exception_handler(sqlite3.OperationalError)
+async def handle_sqlite_operational_error(request: Request, exc: sqlite3.OperationalError):
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Database is temporarily busy or locked. Please retry shortly."},
+    )
+
+
 @app.get("/api/health")
 def health_check():
     return {"status": "ok", "service": "ClaimGuard Validation Engine"}
+
 
 @app.post("/api/validate")
 async def process_request(
@@ -83,9 +94,12 @@ def record_decision(claim_id: int, payload: DecisionRequest):
     """Records a manager's final decision for a claim."""
     if payload.decision not in ["Approved", "Rejected"]:
         raise HTTPException(status_code=400, detail="Invalid decision. Use 'Approved' or 'Rejected'.")
-    
+
     success = update_claim_decision(claim_id, payload.decision)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Claim with id {claim_id} not found.")
     return {"status": "success", "claim_id": claim_id, "decision": payload.decision}
+
 
 @app.get("/api/export.csv", response_class=PlainTextResponse)
 def export_claims_csv():

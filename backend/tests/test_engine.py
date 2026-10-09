@@ -1,9 +1,33 @@
+import sqlite3
 import pytest
-from backend.engine import run_deterministic_checks
+from fastapi.testclient import TestClient
+
+from backend import engine
+from backend.engine import (
+    RuleResult,
+    ValidationResult,
+    get_all_claims,
+    run_deterministic_checks,
+    save_claim,
+    update_claim_decision,
+    with_db_retry,
+)
 from backend.gemma_client import ClaimExtraction, LineItem
+from backend.main import app
+
+client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def isolate_test_db(tmp_path, monkeypatch):
+    test_db = str(tmp_path / "test_claimguard.db")
+    monkeypatch.setenv("CLAIMGUARD_DB_FILE", test_db)
+    monkeypatch.setattr(engine, "DB_FILE", test_db)
+    engine.init_db()
+
+
 
 def test_valid_expense():
-    # Setup mock valid data
     mock_data = ClaimExtraction(
         provider_name="Test Vendor",
         patient_or_employee_name="John Doe",
@@ -11,12 +35,12 @@ def test_valid_expense():
         currency="INR",
         items=[LineItem(description="Lunch", amount=500.0)],
         total_extracted=500.0,
-        confidence_score=0.9
+        confidence_score=0.9,
     )
-    # Different image bytes so hash doesn't trigger duplicate
     result = run_deterministic_checks(mock_data, b"fake_image_bytes_1", "{}", "expense")
-    assert result.is_valid == True
+    assert result.is_valid is True
     assert result.final_amount_inr == 500.0
+
 
 def test_over_limit_expense():
     mock_data = ClaimExtraction(
@@ -26,12 +50,13 @@ def test_over_limit_expense():
         currency="USD",
         items=[LineItem(description="Expensive Dinner", amount=100.0)],
         total_extracted=100.0,
-        confidence_score=0.9
+        confidence_score=0.9,
     )
     # USD 100 * 83.5 = 8350 INR (over the default 4000 limit)
     result = run_deterministic_checks(mock_data, b"fake_image_bytes_2", "{}", "expense")
-    assert result.is_valid == False
+    assert result.is_valid is False
     assert any("EXCEEDS policy limit" in r.message for r in result.results)
+
 
 def test_duplicate_fraud():
     mock_data = ClaimExtraction(
@@ -41,18 +66,15 @@ def test_duplicate_fraud():
         currency="INR",
         items=[LineItem(description="Lunch", amount=500.0)],
         total_extracted=500.0,
-        confidence_score=0.9
+        confidence_score=0.9,
     )
-    # Send the same exact bytes twice
     result1 = run_deterministic_checks(mock_data, b"duplicate_bytes", "{}", "expense")
     result2 = run_deterministic_checks(mock_data, b"duplicate_bytes", "{}", "expense")
-    
-    # First should pass fraud check
+
     assert any("unique" in r.message for r in result1.results if r.rule_name == "Fraud Detection")
-    
-    # Second should fail fraud check
-    assert result2.is_valid == False
+    assert result2.is_valid is False
     assert any("DUPLICATE DETECTED" in r.message for r in result2.results if r.rule_name == "Fraud Detection")
+
 
 def test_health_insurance_consumables():
     mock_data = ClaimExtraction(
@@ -62,11 +84,156 @@ def test_health_insurance_consumables():
         currency="INR",
         items=[
             LineItem(description="Room Rent", amount=2000.0, category="room_rent"),
-            LineItem(description="Gloves", amount=500.0, category="consumables")
+            LineItem(description="Gloves", amount=500.0, category="consumables"),
         ],
         total_extracted=2500.0,
-        confidence_score=0.9
+        confidence_score=0.9,
     )
     result = run_deterministic_checks(mock_data, b"fake_image_bytes_4", "{}", "health_insurance")
-    assert result.is_valid == False
+    assert result.is_valid is False
     assert any("Consumables Excluded" in r.rule_name for r in result.results)
+
+
+def test_save_and_retrieve_claims():
+    mock_data = ClaimExtraction(
+        provider_name="Starbucks Audit",
+        patient_or_employee_name="Alice",
+        date_extracted="2026-10-09",
+        currency="INR",
+        items=[LineItem(description="Coffee", amount=250.0, category="meals")],
+        total_extracted=2500.0,
+        confidence_score=0.95,
+    )
+    val_result = ValidationResult(
+        is_valid=True,
+        final_amount_inr=250.0,
+        results=[RuleResult(rule_name="Policy Limit", passed=True, message="OK")],
+    )
+
+    claim_id = save_claim("expense", mock_data, val_result)
+    assert isinstance(claim_id, int)
+    assert claim_id > 0
+
+    all_claims = get_all_claims()
+    assert len(all_claims) > 0
+    saved = next((c for c in all_claims if c["id"] == claim_id), None)
+    assert saved is not None
+    assert saved["domain"] == "expense"
+    assert saved["total_inr"] == 250.0
+    assert saved["status"] == "Pending"
+    assert saved["validation_data"]["is_valid"] is True
+    assert saved["extracted_data"]["provider_name"] == "Starbucks Audit"
+
+
+def test_update_claim_decision():
+    mock_data = ClaimExtraction(
+        provider_name="Apollo Clinic",
+        patient_or_employee_name="Bob",
+        date_extracted="2026-10-09",
+        currency="INR",
+        items=[LineItem(description="Consultation", amount=1200.0, category="doctor_fee")],
+        total_extracted=1200.0,
+        confidence_score=0.98,
+    )
+    val_result = ValidationResult(
+        is_valid=True,
+        final_amount_inr=1200.0,
+        results=[],
+    )
+    claim_id = save_claim("health_insurance", mock_data, val_result)
+
+    # Approve claim
+    success = update_claim_decision(claim_id, "Approved")
+    assert success is True
+
+    claims = get_all_claims()
+    matched = next((c for c in claims if c["id"] == claim_id), None)
+    assert matched is not None
+    assert matched["status"] == "Approved"
+
+    # Reject non-existent claim
+    fail = update_claim_decision(9999999, "Approved")
+    assert fail is False
+
+
+def test_api_claims_and_decision_endpoints():
+    # Test GET /api/claims
+    res = client.get("/api/claims")
+    assert res.status_code == 200
+    claims = res.json()
+    assert isinstance(claims, list)
+
+    # Save a claim and test decision endpoint
+    mock_data = ClaimExtraction(
+        provider_name="Test Decision Vendor",
+        patient_or_employee_name="Carol",
+        date_extracted="2026-10-09",
+        currency="INR",
+        items=[LineItem(description="Taxi", amount=300.0, category="transport")],
+        total_extracted=300.0,
+        confidence_score=0.9,
+    )
+    val_result = ValidationResult(is_valid=True, final_amount_inr=300.0, results=[])
+    claim_id = save_claim("expense", mock_data, val_result)
+
+    # Test valid approval
+    resp_approve = client.post(f"/api/claims/{claim_id}/decision", json={"decision": "Approved"})
+    assert resp_approve.status_code == 200
+    assert resp_approve.json()["decision"] == "Approved"
+
+    # Test valid rejection
+    resp_reject = client.post(f"/api/claims/{claim_id}/decision", json={"decision": "Rejected"})
+    assert resp_reject.status_code == 200
+    assert resp_reject.json()["decision"] == "Rejected"
+
+    # Test invalid decision value
+    resp_invalid = client.post(f"/api/claims/{claim_id}/decision", json={"decision": "PendingReview"})
+    assert resp_invalid.status_code == 400
+
+    # Test 404 for missing claim
+    resp_missing = client.post("/api/claims/9999999/decision", json={"decision": "Approved"})
+    assert resp_missing.status_code == 404
+
+
+def test_api_export_csv():
+    res = client.get("/api/export.csv")
+    assert res.status_code == 200
+    assert "text/csv" in res.headers.get("content-type", "")
+    content = res.text
+    assert "ID,Timestamp,Domain,Total_INR,System_Valid,Manager_Status,Vendor/Hospital" in content
+
+
+def test_api_file_upload_validation_limits():
+    # Oversized file (> 5MB)
+    large_payload = b"A" * (5 * 1024 * 1024 + 1024)
+    res_large = client.post(
+        "/api/validate",
+        files={"file": ("large.png", large_payload, "image/png")},
+        data={"domain_mode": "expense"},
+    )
+    assert res_large.status_code == 400
+    assert "5 MB" in res_large.json()["detail"]
+
+    # Unsupported MIME type
+    res_mime = client.post(
+        "/api/validate",
+        files={"file": ("doc.pdf", b"%PDF-1.4...", "application/pdf")},
+        data={"domain_mode": "expense"},
+    )
+    assert res_mime.status_code == 400
+    assert "JPEG and PNG" in res_mime.json()["detail"]
+
+
+def test_db_operational_error_retry():
+    call_count = {"count": 0}
+
+    @with_db_retry
+    def transient_locked_operation():
+        call_count["count"] += 1
+        if call_count["count"] < 3:
+            raise sqlite3.OperationalError("database is locked")
+        return "success"
+
+    result = transient_locked_operation()
+    assert result == "success"
+    assert call_count["count"] == 3

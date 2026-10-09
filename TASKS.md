@@ -7,7 +7,7 @@
 - [x] Set up tests for fallback/mock mode.
 - [x] Package the logic into `skills/expense-claim-audit/SKILL.md` (Agent Skill Standard).
 - [x] Align the validation endpoint and response key with `AGENTS.md`.
-- [ ] Add database-lock handling and endpoint smoke tests.
+- [x] Add database-lock handling and endpoint smoke tests.
 
 ## Person B (Frontend & Demo)
 - [x] Initialize Vite + React in `frontend/`.
