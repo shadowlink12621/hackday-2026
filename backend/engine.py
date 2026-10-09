@@ -144,6 +144,32 @@ def get_all_claims() -> List[dict[str, Any]]:
 
 
 @with_db_retry
+def get_claim_by_id(claim_id: int) -> Optional[dict[str, Any]]:
+    """Retrieves a single claim from the DB by ID."""
+    with get_db_connection() as conn:
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        c.execute("SELECT * FROM claims WHERE id = ?", (claim_id,))
+        r = c.fetchone()
+        
+    if not r:
+        return None
+        
+    val_data = json.loads(r["verification_json"])
+    return {
+        "id": r["id"],
+        "domain": r["domain"],
+        "total_inr": r["total_inr"],
+        "is_valid": bool(r["is_valid"]),
+        "status": r["status"],
+        "extracted_data": json.loads(r["extracted_json"]),
+        "validation_data": val_data,
+        "verification_data": val_data,
+        "timestamp": r["timestamp"],
+    }
+
+
+@with_db_retry
 def update_claim_decision(claim_id: int, decision: str) -> bool:
     """Updates a claim's status (Approved/Rejected). Returns False if claim_id not found."""
     with get_db_connection() as conn:

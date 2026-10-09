@@ -11,16 +11,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
-
 from .engine import (
     analyze_insurance_message,
     generate_claim_calendar_ics,
     get_all_claims,
+    get_claim_by_id,
     run_deterministic_checks,
     save_claim,
     update_claim_decision,
 )
-from .gemma_client import extract_form_data, get_model_status
+from .gemma_client import extract_form_data, get_model_status, chat_with_claim
 from .knowledge_loader import get_insurer_knowledge, list_known_insurers
 
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
@@ -169,6 +169,19 @@ def record_decision(claim_id: int, payload: DecisionRequest):
         raise HTTPException(status_code=404, detail=f"Claim with id {claim_id} not found.")
     return {"status": "success", "claim_id": claim_id, "decision": payload.decision}
 
+class ChatRequest(BaseModel):
+    claim_id: int
+    question: str
+
+@app.post("/api/chat")
+async def chat_endpoint(payload: ChatRequest):
+    """Allows user to chat with the Gemma model about a specific claim."""
+    claim = get_claim_by_id(payload.claim_id)
+    if not claim:
+        raise HTTPException(status_code=404, detail=f"Claim {payload.claim_id} not found.")
+    
+    answer = await run_in_threadpool(chat_with_claim, json.dumps(claim), payload.question)
+    return {"answer": answer}
 
 class ScamCheckRequest(BaseModel):
     message_text: str
