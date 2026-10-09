@@ -1,0 +1,7 @@
+error when starting dev server:
+Error: Port 5173 is already in use
+    at httpServerStart (file:///C:/Users/srida/hackday-2026/frontend/node_modules/vite/dist/node/chunks/node.js:14706:10)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async startServer (file:///C:/Users/srida/hackday-2026/frontend/node_modules/vite/dist/node/chunks/node.js:25156:30)
+    at async Object.listen (file:///C:/Users/srida/hackday-2026/frontend/node_modules/vite/dist/node/chunks/node.js:24962:4)
+    at async CAC.<anonymous> (file:///C:/Users/srida/hackday-2026/frontend/node_modules/vite/dist/node/cli.js:725:3)

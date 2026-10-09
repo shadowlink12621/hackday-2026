@@ -127,14 +127,28 @@ def extract_form_data(
     use_local_llm = os.environ.get("USE_LOCAL_LLM", "").lower() in ("1", "true", "yes")
     force_mock = os.environ.get("FORCE_MOCK", "").lower() in ("1", "true", "yes")
 
+    pdf_text = ""
+    if mime_type == "application/pdf" and file_bytes:
+        try:
+            import io
+            import pypdf
+            reader = pypdf.PdfReader(io.BytesIO(file_bytes))
+            pdf_text = "\n".join(page.extract_text() or "" for page in reader.pages)
+            user_prompt = f"{user_prompt}\n\n[Extracted Document Text]:\n{pdf_text}"
+            file_bytes = b""  # Clear binary to prevent sending PDF bytes to image APIs
+        except Exception as e:
+            print(f"PDF extraction failed: {e}")
+
+    has_content = bool(file_bytes or pdf_text)
+
     # Tier 1: Local Ollama if explicitly requested or if no cloud key is present
-    if not force_mock and (use_local_llm or (not api_key and file_bytes)):
+    if not force_mock and (use_local_llm or (not api_key and has_content)):
         ollama_extracted = _extract_via_ollama(file_bytes, user_prompt, domain_mode)
         if ollama_extracted:
             return ollama_extracted, False, f"local_ollama ({os.environ.get('OLLAMA_MODEL', 'gemma2')})"
 
-    # Tier 2: Cloud Google GenAI (Gemma 4)
-    if not force_mock and HAS_GENAI and api_key and file_bytes and not use_local_llm:
+            # Tier 2: Cloud Google GenAI (Gemma 4)
+    if not force_mock and HAS_GENAI and api_key and has_content and not use_local_llm:
         try:
             client = genai.Client(api_key=api_key)
             model_name = os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it")
@@ -154,12 +168,14 @@ def extract_form_data(
             Provide a confidence score estimate between 0.0 and 1.0.
             """
 
+            contents = []
+            if file_bytes:
+                contents.append(types.Part.from_bytes(data=file_bytes, mime_type=mime_type))
+            contents.append(prompt)
+
             response = client.models.generate_content(
                 model=model_name,
-                contents=[
-                    types.Part.from_bytes(data=file_bytes, mime_type=mime_type),
-                    prompt,
-                ],
+                contents=contents,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
                     response_schema=ClaimExtraction,
@@ -173,7 +189,7 @@ def extract_form_data(
             print(f"GenAI extraction failed: {e}. Trying local or fallback mock.")
 
     # Tier 1.5: If Cloud GenAI failed and we didn't try Ollama yet, try Ollama now
-    if not force_mock and not use_local_llm and file_bytes:
+    if not force_mock and not use_local_llm and has_content:
         ollama_extracted = _extract_via_ollama(file_bytes, user_prompt, domain_mode)
         if ollama_extracted:
             return ollama_extracted, False, f"local_ollama ({os.environ.get('OLLAMA_MODEL', 'gemma2')})"

@@ -30,11 +30,13 @@ export default function PolicyNavigatorTab() {
   const handleUpload = async (file) => {
     setLoading(true);
     try {
-      await uploadPolicy(caseId, file);
+      const response = await uploadPolicy(caseId, file);
+      const newPolicyId = response.policy_id;
       // Wait a moment then fetch
       setTimeout(async () => {
-        const report = await getPolicy(caseId);
+        const report = await getPolicy(newPolicyId);
         setPolicy(report);
+        setCaseId(newPolicyId); // update caseId so chat hits the real backend
         setLoading(false);
       }, 1500);
     } catch (e) {

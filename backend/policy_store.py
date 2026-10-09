@@ -181,7 +181,7 @@ def get_policy(policy_id: int) -> dict[str, Any] | None:
                 "evidence": [match["text"][:1600] for match in matches],
                 "status": "conflict_review" if conflicting_room_text else "source_found",
             })
-    policy["profile"] = profile
+    policy["facts"] = profile
     return policy
 
 

@@ -26,7 +26,7 @@ from .policy_store import MAX_POLICY_PDF_BYTES, get_policy, ingest_policy_pdf, r
 from .policy.chat import answer as answer_with_policy
 
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
-ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png"}
+ALLOWED_FILE_TYPES = {"image/jpeg", "image/png", "application/pdf"}
 ALLOWED_DOMAINS = {"expense", "health_insurance"}
 
 app = FastAPI(title="ClaimGuard Enterprise API")
@@ -80,15 +80,15 @@ async def process_request(
     start_time = time.time()
 
     if not file or not file.filename:
-        raise HTTPException(status_code=400, detail="An image file is required for document validation.")
+        raise HTTPException(status_code=400, detail="A file is required for document validation.")
 
     contents = await file.read()
     if not contents or len(contents) == 0:
         raise HTTPException(status_code=400, detail="Uploaded file cannot be empty.")
 
     mime_type = file.content_type or "application/octet-stream"
-    if mime_type not in ALLOWED_IMAGE_TYPES:
-        raise HTTPException(status_code=400, detail="Only JPEG and PNG images are supported.")
+    if mime_type not in ALLOWED_FILE_TYPES:
+        raise HTTPException(status_code=400, detail="Only JPEG, PNG, and PDF files are supported.")
     if len(contents) > MAX_FILE_SIZE_BYTES:
         raise HTTPException(status_code=400, detail="File size must be 5 MB or less.")
 
