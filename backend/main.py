@@ -314,6 +314,7 @@ def read_policy(policy_id: int):
 class PolicyQuestion(BaseModel):
     question: str
     allow_cloud_processing: bool = False
+    history: list[dict[str, str]] = Field(default_factory=list, max_length=8)
 
 
 class PolicySummaryRequest(BaseModel):
@@ -343,9 +344,17 @@ async def ask_policy(policy_id: int, payload: PolicyQuestion):
     policy = get_policy(policy_id)
     if not policy:
         raise HTTPException(status_code=404, detail=f"Policy {policy_id} not found.")
-    evidence = retrieve_policy_pages(policy_id, payload.question)
+    history = [
+        {"role": turn["role"], "text": turn["text"][:1200]}
+        for turn in payload.history[-8:]
+        if turn.get("role") in {"user", "assistant"} and turn.get("text", "").strip()
+    ]
+    context_query = " ".join(
+        [turn["text"] for turn in history if turn["role"] == "user"] + [payload.question]
+    )
+    evidence = retrieve_policy_pages(policy_id, context_query)
     result = await run_in_threadpool(
-        answer_with_policy, payload.question, evidence, payload.allow_cloud_processing
+        answer_with_policy, payload.question, evidence, payload.allow_cloud_processing, history
     )
     return {"policy": policy, **result}
 

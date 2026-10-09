@@ -262,3 +262,66 @@ def test_scanned_policy_requires_explicit_cloud_consent(monkeypatch):
     ])
     with pytest.raises(ValueError, match="Enable cloud-processing consent"):
         policy_store.ingest_policy_pdf(b"%PDF scanned", "scanned.pdf")
+
+
+def test_policy_chat_uses_gemma_only_after_consent_and_keeps_turn_context(monkeypatch):
+    import json
+    from backend.policy import llm
+    from backend.policy.chat import answer
+
+    class FakeModels:
+        calls = []
+
+        def generate_content(self, **kwargs):
+            self.calls.append(kwargs)
+            return SimpleNamespace(text=json.dumps({
+                "answer": "The cited room limit applies [page 4].",
+                "citations": [{"page": 4, "quote": "Room charges are limited."}],
+            }))
+
+    models = FakeModels()
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            self.models = models
+
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setenv("GEMMA_MODEL", "gemma-4-26b-a4b-it")
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
+    monkeypatch.setenv("USE_LOCAL_LLM", "0")
+    monkeypatch.setattr(llm, "HAS_GENAI", True)
+    monkeypatch.setattr(llm, "genai", SimpleNamespace(Client=FakeClient))
+    evidence = [{"page": 4, "text": "Room charges are limited."}]
+    history = [{"role": "user", "text": "What is the room rent cap?"}]
+
+    offline = answer("Does that apply to ICU?", evidence, False, history)
+    assert offline["model_used"] == "retrieval_only"
+    assert models.calls == []
+
+    cloud = answer("Does that apply to ICU?", evidence, True, history)
+    assert cloud["model_used"] == "cloud_gemma (gemma-4-26b-a4b-it)"
+    assert "What is the room rent cap?" in models.calls[0]["contents"]
+    assert cloud["citations"][0]["quote"] == "Room charges are limited."
+
+
+def test_policy_chat_api_forwards_consent_and_history(monkeypatch):
+    monkeypatch.setattr(policy_store, "extract_pdf_pages", lambda _: [
+        {"page": 1, "text": "Room charges are limited to a standard room.", "images": []},
+    ])
+    policy_id = policy_store.ingest_policy_pdf(b"%PDF chat fixture", "chat-policy.pdf")["policy_id"]
+    received = {}
+
+    def fake_answer(question, evidence, consent, history):
+        received.update(question=question, evidence=evidence, consent=consent, history=history)
+        return {"answer": "Source-backed answer", "citations": [], "model_used": "test"}
+
+    monkeypatch.setattr("backend.main.answer_with_policy", fake_answer)
+    response = client.post(f"/api/policies/{policy_id}/chat", json={
+        "question": "Does that include ICU?",
+        "allow_cloud_processing": True,
+        "history": [{"role": "user", "text": "What is the room rent limit?"}],
+    })
+    assert response.status_code == 200
+    assert received["consent"] is True
+    assert "room charges" in received["evidence"][0]["text"].lower()
+    assert received["history"][0]["text"] == "What is the room rent limit?"

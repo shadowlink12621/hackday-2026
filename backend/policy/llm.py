@@ -10,20 +10,25 @@ try:
 except ImportError:
     HAS_GENAI = False
 
-def get_active_tier():
+def get_active_tier(allow_cloud_processing: bool = False):
     api_key = os.environ.get("GEMINI_API_KEY")
     use_local_llm = os.environ.get("USE_LOCAL_LLM", "").lower() in ("1", "true", "yes")
-    if HAS_GENAI and api_key and not use_local_llm:
+    if allow_cloud_processing and HAS_GENAI and api_key and not use_local_llm:
         return "cloud_gemma"
     return "offline_mock"
 
-def generate_json(prompt: str, schema_cls: Type[BaseModel], images=None) -> tuple[BaseModel, str, bool]:
+def generate_json(
+    prompt: str,
+    schema_cls: Type[BaseModel],
+    images=None,
+    allow_cloud_processing: bool = False,
+) -> tuple[BaseModel, str, bool]:
     """Generates structured JSON using Gemma."""
-    tier = get_active_tier()
+    tier = get_active_tier(allow_cloud_processing)
     if tier == "cloud_gemma":
         try:
             client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-            model_name = os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it")
+            model_name = os.environ.get("GEMINI_MODEL") or os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it")
             json_schema = json.dumps(schema_cls.model_json_schema(), ensure_ascii=False)
             model_prompt = (
                 f"{prompt}\n\nReturn only one JSON object matching this schema:\n{json_schema}"

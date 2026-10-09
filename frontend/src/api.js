@@ -110,11 +110,11 @@ export async function uploadCaseDocument(caseId, file, category, allowCloudProce
   return response.json();
 }
 
-export async function askPolicy(policyId, question, allowCloudProcessing = false) {
+export async function askPolicy(policyId, question, allowCloudProcessing = false, history = []) {
   const response = await request(`/policies/${encodeURIComponent(policyId)}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question, allow_cloud_processing: allowCloudProcessing }),
+    body: JSON.stringify({ question, allow_cloud_processing: allowCloudProcessing, history }),
   });
   return response.json();
 }

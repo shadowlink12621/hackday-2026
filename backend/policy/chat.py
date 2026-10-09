@@ -54,17 +54,22 @@ def _extractive_answer(question: str, evidence: list) -> ChatResponse:
     answer += "\n\nThis is quoted policy text for guidance, not a coverage or claim-approval decision."
     return ChatResponse(answer=answer, citations=citations)
 
-def answer(question, evidence=None, chunks=None, legacy_question=None) -> dict:
+def answer(question, evidence=None, allow_cloud_processing=False, history=None) -> dict:
     """Answers a question based on policy chunks and profile."""
-    # Accept the current (question, evidence) route and the earlier
-    # (case, report, chunks, question) call shape while branches are integrating.
-    if legacy_question is not None:
-        question, evidence = legacy_question, chunks
     evidence = evidence or []
+    history = history or []
+    dialogue = "\n".join(
+        f"{turn['role']}: {turn['text']}" for turn in history
+        if turn.get("role") in {"user", "assistant"} and turn.get("text")
+    )
     prompt = f"""
-    Answer the user's question based ONLY on the provided policy chunks.
+    Answer the user's current question based ONLY on the provided policy chunks.
+    Use prior dialogue only to resolve references in the current question; prior answers are not policy evidence.
     If the answer is not in the excerpts, say "Not found in the indexed excerpts."
     Do not invent answers or policies. Cite page numbers where facts are found.
+
+    PRIOR DIALOGUE (context only):
+    {dialogue or '[No prior turns]'}
 
     CHUNKS:
     {evidence}
@@ -72,7 +77,9 @@ def answer(question, evidence=None, chunks=None, legacy_question=None) -> dict:
     User Question: {question}
     """
 
-    response_obj, model_used, is_fallback = generate_json(prompt, ChatResponse)
+    response_obj, model_used, is_fallback = generate_json(
+        prompt, ChatResponse, allow_cloud_processing=allow_cloud_processing
+    )
 
     if is_fallback:
         response_obj = _extractive_answer(question, evidence)

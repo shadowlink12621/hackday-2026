@@ -200,7 +200,11 @@ export default function PolicyNavigator() {
     setBusy(true);
     setError('');
     try {
-      const response = await askPolicy(policyDocument.policy_id, prompt, cloudConsent);
+      const history = messages.slice(-8).map((message) => ({
+        role: message.role === 'assistant' ? 'assistant' : 'user',
+        text: message.text || message.answer || '',
+      }));
+      const response = await askPolicy(policyDocument.policy_id, prompt, cloudConsent, history);
       setMessages((previous) => [...previous, { role: 'assistant', ...response }]);
     } catch (err) {
       setError(err.message);
@@ -493,7 +497,7 @@ export default function PolicyNavigator() {
                         const prompt = suggestion;
                         setMessages((previous) => [...previous, { role: 'user', text: prompt }]);
                         setBusy(true);
-                        askPolicy(policyDocument.policy_id, prompt, cloudConsent)
+                        askPolicy(policyDocument.policy_id, prompt, cloudConsent, messages.slice(-8).map((message) => ({ role: message.role, text: message.text || message.answer || '' })))
                           .then((res) => setMessages((previous) => [...previous, { role: 'assistant', ...res }]))
                           .catch((err) => setError(err.message))
                           .finally(() => setBusy(false));
@@ -512,7 +516,7 @@ export default function PolicyNavigator() {
                 <article className={`chat-message ${message.role}`} key={`${message.role}-${index}`}>
                   <strong>{message.role === 'user' ? 'You' : (message.model_used || 'Source retrieval')}</strong>
                   <p>{message.text || message.answer}</p>
-                  {message.citations?.map((citation) => <details key={`${index}-${citation.page}`}><summary>PDF page {citation.page}</summary><p>{citation.excerpt}</p></details>)}
+                  {message.citations?.map((citation) => <details key={`${index}-${citation.page}`}><summary>PDF page {citation.page}</summary><p>{citation.excerpt || citation.quote || ''}</p></details>)}
                 </article>
               ))}
             </div>
