@@ -219,11 +219,11 @@ def test_api_file_upload_validation_limits():
     # Unsupported MIME type
     res_mime = client.post(
         "/api/validate",
-        files={"file": ("doc.pdf", b"%PDF-1.4...", "application/pdf")},
+        files={"file": ("doc.txt", b"plain text...", "text/plain")},
         data={"domain_mode": "expense"},
     )
     assert res_mime.status_code == 400
-    assert "JPEG and PNG" in res_mime.json()["detail"]
+    assert "Only JPEG, PNG, and searchable PDF files are supported" in res_mime.json()["detail"]
 
 
 def test_unsupported_currency_flagged():

@@ -11,8 +11,10 @@ import FeatureShaderCards from './components/ui/feature-shader-cards';
 import BenefitCalendar from './components/BenefitCalendar';
 import ScamCheck from './components/ScamCheck';
 import InsurerKnowledge from './components/InsurerKnowledge';
+import PolicyNavigatorTab from './components/PolicyNavigatorTab';
 
 const appTabs = [
+  { id: 'navigator', label: 'Policy Navigator' },
   { id: 'claims', label: 'Claims Workspace' },
   { id: 'calendar', label: 'Benefit Calendar' },
   { id: 'scamcheck', label: 'ScamCheck' },
@@ -212,6 +214,11 @@ function App() {
         {activeTab === 'insurers' && (
           <div id="panel-insurers" className="app-tab-panel" role="tabpanel" aria-labelledby="tab-insurers" tabIndex={0}>
             <InsurerKnowledge />
+          </div>
+        )}
+        {activeTab === 'navigator' && (
+          <div id="panel-navigator" className="app-tab-panel" role="tabpanel" aria-labelledby="tab-navigator" tabIndex={0}>
+            <PolicyNavigatorTab />
           </div>
         )}
       </main>

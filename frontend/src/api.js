@@ -42,6 +42,74 @@ export function getExportCsvUrl() {
   return `${API}/export.csv`;
 }
 
+// Case & Policy APIs
+export async function createCase(caseData) {
+  const response = await request('/cases', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(caseData),
+  });
+  return response.json();
+}
+
+export async function listCases() {
+  try {
+    const response = await request('/cases');
+    return response.json();
+  } catch (e) {
+    return [];
+  }
+}
+
+export async function getCase(id) {
+  const response = await request(`/cases/${encodeURIComponent(id)}`);
+  return response.json();
+}
+
+export async function uploadPolicy(caseId, file) {
+  const form = new FormData();
+  form.append('file', file);
+  const response = await request(`/cases/${encodeURIComponent(caseId)}/policy`, {
+    method: 'POST',
+    body: form,
+  });
+  return response.json();
+}
+
+export async function getPolicy(caseId) {
+  try {
+    const response = await request(`/cases/${encodeURIComponent(caseId)}/policy`);
+    return await response.json();
+  } catch (err) {
+    // Mock fallback
+    console.warn("Backend missing /cases endpoint, using mock policy report for demo.");
+    const mock = await import('./mocks/policyReport.sample.json');
+    return mock.default;
+  }
+}
+
+export async function addEvent(caseId, eventData) {
+  const response = await request(`/cases/${encodeURIComponent(caseId)}/events`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(eventData),
+  });
+  return response.json();
+}
+
+export function getCaseIcsUrl(caseId) {
+  return `${API}/cases/${encodeURIComponent(caseId)}/calendar.ics`;
+}
+
+export async function chatCase(caseId, question) {
+  const response = await request(`/cases/${encodeURIComponent(caseId)}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question }),
+  });
+  return response.json();
+}
+
 export async function checkScamMessage(messageText) {
   const response = await request('/scamcheck', {
     method: 'POST',
