@@ -1,5 +1,6 @@
 import os
 from pydantic import BaseModel, Field
+from typing import Optional, List
 import json
 
 try:
@@ -12,20 +13,20 @@ except ImportError:
 class LineItem(BaseModel):
     description: str
     amount: float
+    category: Optional[str] = None # e.g. "meals", "room_rent", "consumables"
 
-class ReceiptExtraction(BaseModel):
-    vendor_name: str
-    date_extracted: str | None
+class ClaimExtraction(BaseModel):
+    provider_name: str = Field(description="Vendor or Hospital name")
+    patient_or_employee_name: Optional[str] = Field(description="Patient name for health, employee for expenses")
+    date_extracted: Optional[str]
     currency: str = Field(description="e.g. USD, INR, EUR")
-    items: list[LineItem]
+    items: List[LineItem]
     total_extracted: float
     confidence_score: float
 
-def extract_form_data(file_bytes: bytes, mime_type: str, user_prompt: str, domain_mode: str) -> tuple[ReceiptExtraction, bool]:
+def extract_form_data(file_bytes: bytes, mime_type: str, user_prompt: str, domain_mode: str) -> tuple[ClaimExtraction, bool]:
     """
-    Uses Gemma 4 (via GenAI SDK) to analyze the receipt.
-    Returns (ReceiptExtraction, is_mock).
-    Falls back to a mock deterministic response if API is unavailable.
+    Uses Gemma 4 to analyze the receipt or health insurance claim.
     """
     api_key = os.environ.get("GEMINI_API_KEY")
     is_mock = True
@@ -36,10 +37,12 @@ def extract_form_data(file_bytes: bytes, mime_type: str, user_prompt: str, domai
             model = "gemini-2.5-flash" 
             
             prompt = f"""
-            Analyze this uploaded receipt.
-            Extract the vendor name, date, and currency used.
-            List all line items with their amounts.
-            Extract the total amount as written on the receipt.
+            Domain Mode: {domain_mode} (e.g. 'expense' or 'health_insurance')
+            User Prompt: {user_prompt}
+            
+            Analyze this uploaded document.
+            If it's an expense receipt: Extract the vendor name, date, currency, line items (with categories like 'meals', 'transport'), and total.
+            If it's an Indian health insurance bill: Extract the hospital name (provider), patient name, date, currency (usually INR). For line items, carefully categorize them as 'room_rent', 'pharmacy', 'consumables', 'doctor_fee', etc. Extract the total.
             Provide a confidence score (0.0 to 1.0).
             """
             
@@ -51,27 +54,43 @@ def extract_form_data(file_bytes: bytes, mime_type: str, user_prompt: str, domai
                 ],
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
-                    response_schema=ReceiptExtraction,
+                    response_schema=ClaimExtraction,
                     temperature=0.1
                 )
             )
             
             is_mock = False
-            return ReceiptExtraction.model_validate_json(response.text), is_mock
+            return ClaimExtraction.model_validate_json(response.text), is_mock
         except Exception as e:
             print(f"GenAI API failed, falling back to mock. Error: {e}")
     
     # Fallback / Mock Mode
-    print("Using offline mock mode (no API key, missing file, or API failed)")
-    mock_data = ReceiptExtraction(
-        vendor_name="Starbucks (MOCKED)",
-        date_extracted="2026-10-09",
-        currency="USD",
-        items=[
-            LineItem(description="Venti Latte", amount=6.50),
-            LineItem(description="Croissant", amount=3.50)
-        ],
-        total_extracted=10.00,
-        confidence_score=0.92
-    )
+    print("Using offline mock mode")
+    if domain_mode == "health_insurance":
+        mock_data = ClaimExtraction(
+            provider_name="Apollo Hospitals (MOCKED)",
+            patient_or_employee_name="Rahul Sharma",
+            date_extracted="2026-10-09",
+            currency="INR",
+            items=[
+                LineItem(description="ICU Room Rent (2 days)", amount=20000, category="room_rent"),
+                LineItem(description="Surgical Consumables (Gloves, Syringes)", amount=3500, category="consumables"),
+                LineItem(description="Surgeon Fee", amount=45000, category="doctor_fee")
+            ],
+            total_extracted=68500.0,
+            confidence_score=0.92
+        )
+    else:
+        mock_data = ClaimExtraction(
+            provider_name="Starbucks (MOCKED)",
+            patient_or_employee_name="John Doe",
+            date_extracted="2026-10-09",
+            currency="USD",
+            items=[
+                LineItem(description="Venti Latte", amount=6.50, category="meals"),
+                LineItem(description="Croissant", amount=3.50, category="meals")
+            ],
+            total_extracted=10.00,
+            confidence_score=0.95
+        )
     return mock_data, is_mock
