@@ -10,7 +10,6 @@ services:
     # Build from the repository root so `backend.main:app` stays importable.
     source_dir: /
     environment_slug: python
-    build_command: pip install -r backend/requirements.txt
     run_command: uvicorn backend.main:app --host 0.0.0.0 --port 8080
     http_port: 8080
     instance_count: 1
